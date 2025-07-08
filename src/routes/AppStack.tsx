@@ -6,7 +6,7 @@ import { DetailScreen } from '@screens';
 
 export type AppStackParamList = {
     AppTabNavigation: NavigatorScreenParams<AppBottomTabParamList>;
-    DetailScreen: undefined;
+    DetailScreen: { cycleId: string };
 };
 
 const Stack = createStackNavigator<AppStackParamList>();
