@@ -1,8 +1,10 @@
 import { SensorData, SyncData } from '../types/cycle';
+import RNFS from 'react-native-fs';
 
 export class FileService {
   private static readonly SIMULATION_FILE = 'simulacao.jsonl';
   private static readonly SYNC_FILE = 'sync_servidor.jsonl';
+  private static readonly OUTPUT_FILE = 'dados_sincronizados.jsonl';
 
   public static async loadSimulationData(): Promise<SensorData[]> {
     try {
@@ -89,18 +91,78 @@ export class FileService {
 
   public static async saveSyncData(syncData: SyncData[]): Promise<boolean> {
     try {
-      // Em um app real, isso seria uma escrita real no arquivo
-      // Por enquanto, vamos apenas simular o sucesso
+      if (syncData.length === 0) {
+        console.log('Nenhum dado para sincronizar');
+        return true;
+      }
 
+      // Mapear para o formato solicitado
+      const formatCycle = (cycle: SyncData) => {
+        // Extrair etapas simplificadas
+        const etapas = cycle.stages.map(etapa => ({
+          etapa: etapa.stage,
+          timestamp: new Date(etapa.timestamp).toISOString(),
+        }));
+
+        // Extrair ponto de basculamento (X, Y)
+        let ponto_basculamento: { X: number | null; Y: number | null } = {
+          X: null,
+          Y: null,
+        };
+        if (cycle.dumpPoint && cycle.dumpPoint.startsWith('GPS:')) {
+          // Exemplo: 'GPS: -19.923, -43.927'
+          const match = cycle.dumpPoint.match(
+            /GPS:\s*(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/,
+          );
+          if (match) {
+            ponto_basculamento = {
+              X: parseFloat(match[1]),
+              Y: parseFloat(match[2]),
+            };
+          }
+        }
+
+        return {
+          ciclo_id: cycle.cycleId,
+          data_inicio: new Date(cycle.startTime).toISOString(),
+          data_fim: new Date(cycle.endTime).toISOString(),
+          etapas,
+          equipamento_id: cycle.cycleId.split('_')[1] || '', // ou outro campo se disponível
+          equipamento_carga: cycle.loadingEquipment,
+          ponto_basculamento,
+          status_sincronizacao: 'SINCRONIZADO',
+        };
+      };
+
+      // Criar conteúdo do arquivo JSONL
       const syncFileContent = syncData
+        .map(formatCycle)
         .map(data => JSON.stringify(data))
         .join('\n');
 
-      console.log('Dados salvos em sync_servidor.jsonl:');
-      console.log(syncFileContent);
+      // Salvar no arquivo sync_servidor.jsonl
+      const outputPath = `${RNFS.DocumentDirectoryPath}/${this.SYNC_FILE}`;
 
-      // Simular delay de escrita
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Verificar se o arquivo já existe para evitar duplicação
+      let existingContent = '';
+      try {
+        existingContent = await RNFS.readFile(outputPath, 'utf8');
+      } catch (error) {
+        // Arquivo não existe, criar novo
+      }
+
+      // Adicionar novos dados ao final do arquivo
+      const newContent = existingContent
+        ? existingContent + '\n' + syncFileContent
+        : syncFileContent;
+
+      await RNFS.writeFile(outputPath, newContent, 'utf8');
+
+      console.log(`✅ Dados sincronizados salvos em: ${outputPath}`);
+      console.log(
+        `📊 Total de ${syncData.length} ciclos completos adicionados ao arquivo sync_servidor.jsonl`,
+      );
+      console.log(`📋 Formato: 1 linha JSON por ciclo completo`);
 
       return true;
     } catch (error) {
@@ -111,13 +173,88 @@ export class FileService {
 
   public static async readSyncFile(): Promise<SyncData[]> {
     try {
-      // Em um app real, isso seria uma leitura real do arquivo
-      // Por enquanto, vamos retornar dados vazios
-      console.log('Lendo arquivo sync_servidor.jsonl');
-      return [];
+      const outputPath = `${RNFS.DocumentDirectoryPath}/${this.SYNC_FILE}`;
+
+      // Verificar se o arquivo existe
+      const exists = await RNFS.exists(outputPath);
+      if (!exists) {
+        console.log('Arquivo sync_servidor.jsonl não encontrado');
+        return [];
+      }
+
+      const fileContent = await RNFS.readFile(outputPath, 'utf8');
+      const lines = fileContent.split('\n').filter(line => line.trim() !== '');
+
+      const syncData: SyncData[] = lines
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch (error) {
+            console.error('Erro ao parsear linha:', line, error);
+            return null;
+          }
+        })
+        .filter(Boolean) as SyncData[];
+
+      console.log(
+        `Lidos ${syncData.length} registros do arquivo sync_servidor.jsonl`,
+      );
+      return syncData;
     } catch (error) {
       console.error('Erro ao ler arquivo de sincronização:', error);
       return [];
+    }
+  }
+
+  public static async getSyncFileInfo(): Promise<{
+    exists: boolean;
+    path: string;
+    size?: number;
+    lineCount?: number;
+  }> {
+    try {
+      const outputPath = `${RNFS.DocumentDirectoryPath}/${this.SYNC_FILE}`;
+      const exists = await RNFS.exists(outputPath);
+
+      if (!exists) {
+        return { exists: false, path: outputPath };
+      }
+
+      const stats = await RNFS.stat(outputPath);
+      const fileContent = await RNFS.readFile(outputPath, 'utf8');
+      const lineCount = fileContent
+        .split('\n')
+        .filter(line => line.trim() !== '').length;
+
+      return {
+        exists: true,
+        path: outputPath,
+        size: stats.size,
+        lineCount,
+      };
+    } catch (error) {
+      console.error('Erro ao obter informações do arquivo:', error);
+      return {
+        exists: false,
+        path: `${RNFS.DocumentDirectoryPath}/${this.SYNC_FILE}`,
+      };
+    }
+  }
+
+  public static async clearSyncFile(): Promise<boolean> {
+    try {
+      const outputPath = `${RNFS.DocumentDirectoryPath}/${this.SYNC_FILE}`;
+      const exists = await RNFS.exists(outputPath);
+
+      if (exists) {
+        await RNFS.unlink(outputPath);
+        console.log('Arquivo sync_servidor.jsonl removido');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro ao limpar arquivo de sincronização:', error);
+      return false;
     }
   }
 
@@ -127,5 +264,9 @@ export class FileService {
 
   public static getSyncFilePath(): string {
     return this.SYNC_FILE;
+  }
+
+  public static getOutputFilePath(): string {
+    return `${RNFS.DocumentDirectoryPath}/${this.OUTPUT_FILE}`;
   }
 }

@@ -1,5 +1,5 @@
 import { IconProps } from '@components';
-import { CycleService, SimulationService } from '@services';
+import { CycleService, SimulationService, StorageService } from '@services';
 import { SyncService } from '@services';
 import { CycleStage } from '@types';
 import { useEffect, useRef, useState } from 'react';
@@ -15,6 +15,8 @@ export const useHomeScreen = () => {
   const [dumpPoint, setDumpPoint] = useState('-19,92, -43,94');
   const [isSynchronized, setIsSynchronized] = useState(true);
   const [pendingCycles, setPendingCycles] = useState(0);
+  const [simulationProgress, setSimulationProgress] = useState(0);
+  const [totalLines, setTotalLines] = useState(0);
 
   const cycleServiceRef = useRef<CycleService | null>(null);
   const simulationServiceRef = useRef<SimulationService | null>(null);
@@ -24,6 +26,10 @@ export const useHomeScreen = () => {
     cycleServiceRef.current = new CycleService();
     simulationServiceRef.current = new SimulationService();
     syncServiceRef.current = new SyncService(cycleServiceRef.current);
+
+    // Carregar último status salvo
+    loadLastStatus();
+    loadSimulationProgress();
 
     const syncCheckInterval = setInterval(() => {
       if (syncServiceRef.current) {
@@ -41,20 +47,82 @@ export const useHomeScreen = () => {
     };
   }, []);
 
+  const loadLastStatus = async () => {
+    try {
+      const lastStatus = await StorageService.getLastCycleStatus();
+      if (lastStatus) {
+        setCurrentStage(lastStatus.stage as CycleStage);
+        setCurrentSpeed(lastStatus.speed);
+        setLoadingEquipment(lastStatus.loadingEquipment);
+        setDumpPoint(lastStatus.dumpPoint);
+        setIsSynchronized(lastStatus.isSynchronized);
+        setPendingCycles(lastStatus.pendingCycles);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar último status:', error);
+    }
+  };
+
+  const loadSimulationProgress = async () => {
+    try {
+      const progress = await StorageService.getSimulationProgress();
+      setSimulationProgress(progress);
+
+      if (simulationServiceRef.current) {
+        setTotalLines(simulationServiceRef.current.getTotalSteps());
+      }
+    } catch (error) {
+      console.error('Erro ao carregar progresso da simulação:', error);
+    }
+  };
+
+  const saveCurrentStatus = async (sensorData: any) => {
+    try {
+      const status = {
+        id: `cycle_${Date.now()}`,
+        timestamp: Date.now(),
+        stage: currentStage,
+        speed: currentSpeed,
+        loadingEquipment,
+        dumpPoint,
+        isSynchronized,
+        pendingCycles,
+        sensorData,
+      };
+
+      await StorageService.saveCycleStatus(status);
+    } catch (error) {
+      console.error('Erro ao salvar status:', error);
+    }
+  };
+
   const handleSimulateReading = async () => {
     if (!cycleServiceRef.current || !simulationServiceRef.current) return;
     setIsSimulating(true);
     try {
-      const sensorData = simulationServiceRef.current.getNextSimulationData();
+      const sensorData =
+        await simulationServiceRef.current.getNextSimulationData();
       if (!sensorData) {
         Alert.alert('Erro', 'Não foi possível obter dados de simulação');
         return;
       }
+
       const result = cycleServiceRef.current.processSensorData(sensorData);
+
+      // Atualizar estado
       setCurrentStage(result.currentStage);
       setCurrentSpeed(result.velocityKmh.toString());
       setLoadingEquipment(result.loadingEquipment || 'N/A');
       setDumpPoint(result.dumpPoint);
+
+      // Atualizar progresso
+      const newProgress = simulationServiceRef.current.getCurrentStep();
+      setSimulationProgress(newProgress);
+      setTotalLines(simulationServiceRef.current.getTotalSteps());
+
+      // Salvar status no AsyncStorage
+      await saveCurrentStatus(sensorData);
+
       if (result.isNewCycle) {
         Alert.alert('Novo Ciclo', 'Iniciado novo ciclo de transporte');
       }
@@ -76,7 +144,6 @@ export const useHomeScreen = () => {
       setIsSimulating(false);
     }
   };
-  ('');
 
   // Ícones para cada campo
   const getStageIcon = (): IconProps['name'] => 'home';
@@ -94,6 +161,8 @@ export const useHomeScreen = () => {
     dumpPoint,
     isSynchronized,
     pendingCycles,
+    simulationProgress,
+    totalLines,
     handleSimulateReading,
     getStageIcon,
     getSpeedIcon,

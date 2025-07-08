@@ -10,20 +10,24 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-masked-view/masked-view": "^0.3.2",
     "@react-native/new-app-screen": "0.80.1",
     "@react-navigation/bottom-tabs": "^7.4.2",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/stack": "^7.4.2",
     "@shopify/restyle": "^2.4.5",
+    "@tanstack/react-query": "^5.81.5",
     "react": "19.1.0",
     "react-hook-form": "^7.60.0",
     "react-native": "0.80.1",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.27.1",
     "react-native-safe-area-context": "^5.5.1",
     "react-native-screens": "^4.11.1",
     "react-native-svg": "^15.12.0",
-    "yarn": "^1.22.22"
+    "yarn": "^1.22.22",
+    "zustand": "^5.0.6"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -36,6 +40,7 @@
     "@react-native/eslint-config": "0.80.1",
     "@react-native/metro-config": "0.80.1",
     "@react-native/typescript-config": "0.80.1",
+    "@tanstack/eslint-plugin-query": "^5.81.2",
     "@types/jest": "^29.5.13",
     "@types/react": "^19.1.0",
     "@types/react-test-renderer": "^19.1.0",

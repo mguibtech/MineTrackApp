@@ -1,4 +1,5 @@
-export * from './HomeScreen/HomeScreen';
-export * from './HistoryScreen/HistoryScreen';
-export * from './SettingsScreen/SettingsScreen';
-export * from './DetailScreen/DetailScreen';
+export { HomeScreen } from './HomeScreen/HomeScreen';
+export { default as HistoryScreen } from './HistoryScreen/HistoryScreen';
+export { SettingsScreen } from './SettingsScreen/SettingsScreen';
+export { DetailScreen } from './DetailScreen/DetailScreen';
+export * from './HistoryScreen/components/ItemHistory';

@@ -1,4 +1,5 @@
 import { SensorData, CycleStage, CycleData, SyncData } from '../types/cycle';
+import { StorageService } from './StorageService';
 
 export class CycleService {
   private currentCycle: CycleData | null = null;
@@ -13,14 +14,65 @@ export class CycleService {
     this.loadCycles();
   }
 
-  private loadCycles() {
-    // TODO: Implementar carregamento de ciclos salvos localmente
-    this.cycles = [];
+  private async loadCycles() {
+    try {
+      const savedCycles = await StorageService.getCycleStatuses();
+      // Filtrar apenas ciclos completos
+      this.cycles = savedCycles
+        .filter(status => status.stage === 'TRÂNSITO VAZIO')
+        .map(status => ({
+          id: status.id,
+          startTime: status.timestamp - 60000, // Aproximação do tempo de início
+          endTime: status.timestamp,
+          stages: [
+            {
+              stage: status.stage as CycleStage,
+              timestamp: status.timestamp,
+              sensorData: status.sensorData,
+            },
+          ],
+          isComplete: true,
+          isSynchronized: false,
+          loadingEquipment: status.loadingEquipment,
+          dumpPoint: status.dumpPoint,
+        }));
+      console.log(`Carregados ${this.cycles.length} ciclos salvos`);
+    } catch (error) {
+      console.error('Erro ao carregar ciclos:', error);
+      this.cycles = [];
+    }
   }
 
-  private saveCycles() {
-    // TODO: Implementar salvamento local de ciclos
-    console.log('Ciclos salvos:', this.cycles);
+  private async saveCycles() {
+    try {
+      // Salvar ciclos completos no AsyncStorage
+      const cycleStatuses = this.cycles.map(cycle => ({
+        id: cycle.id,
+        timestamp: cycle.endTime || Date.now(),
+        stage:
+          cycle.stages[cycle.stages.length - 1]?.stage ||
+          'EM FILA CARREGAMENTO',
+        speed: '0',
+        loadingEquipment: cycle.loadingEquipment || 'N/A',
+        dumpPoint: cycle.dumpPoint || 'N/A',
+        isSynchronized: cycle.isSynchronized,
+        pendingCycles: this.getUnsynchronizedCycles().length,
+        sensorData: cycle.stages[cycle.stages.length - 1]?.sensorData || {
+          timestamp: Date.now(),
+          beacons: [],
+          gps: { latitude: 0, longitude: 0, velocity: 0 },
+        },
+      }));
+
+      // Salvar cada ciclo individualmente
+      for (const status of cycleStatuses) {
+        await StorageService.saveCycleStatus(status);
+      }
+
+      console.log(`${this.cycles.length} ciclos salvos localmente`);
+    } catch (error) {
+      console.error('Erro ao salvar ciclos:', error);
+    }
   }
 
   private generateCycleId(): string {
@@ -114,6 +166,8 @@ export class CycleService {
       this.currentCycle?.stages[this.currentCycle.stages.length - 1]?.stage;
 
     // 1. EM FILA CARREGAMENTO
+    // ● Velocidade = 0 por mais de 5 segundos
+    // ● E (detecta caminhão em fila ou em carregamento para a mesma escavadeira)
     if (
       velocityZeroForThreshold &&
       nearestExcavator &&
@@ -127,6 +181,9 @@ export class CycleService {
     }
 
     // 2. EM CARREGAMENTO
+    // ● Velocidade = 0 por mais de 5 segundos
+    // ● Detecta escavadeira a menos de 2m
+    // ● E nenhum outro caminhão em carregamento para a mesma escavadeira
     if (
       velocityZeroForThreshold &&
       nearestExcavator &&
@@ -137,6 +194,9 @@ export class CycleService {
     }
 
     // 3. TRÂNSITO CHEIO
+    // ● Velocidade > 0
+    // ● Escavadeira a mais de 2m
+    // ● Estado atual é EM CARREGAMENTO
     if (
       velocity > 0 &&
       (!nearestExcavator ||
@@ -147,6 +207,10 @@ export class CycleService {
     }
 
     // 4. EM FILA BASCULAMENTO
+    // ● Velocidade = 0 por mais de 5 segundos
+    // ● GPS igual ou próximo ao ponto de basculamento
+    // ● Sensor de báscula DESATIVADO
+    // ● E (detecta caminhão em fila ou estado atual é TRÂNSITO CHEIO)
     if (
       velocityZeroForThreshold &&
       isNearDump &&
@@ -161,11 +225,17 @@ export class CycleService {
     }
 
     // 5. EM BASCULAMENTO
+    // ● Velocidade = 0
+    // ● GPS igual ao ponto de basculamento
+    // ● Sensor de báscula ATIVADO
     if (velocity === 0 && isNearDump && basculatorActive) {
       return 'EM BASCULAMENTO';
     }
 
     // 6. TRÂNSITO VAZIO
+    // ● Velocidade > 0
+    // ● GPS distante 5m ou mais do ponto de basculamento
+    // ● Estado atual é EM BASCULAMENTO
     if (velocity > 0 && !isNearDump && currentStage === 'EM BASCULAMENTO') {
       return 'TRÂNSITO VAZIO';
     }

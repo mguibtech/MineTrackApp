@@ -1,301 +1,100 @@
-# 🚛 Minetrack - Simulador de Ciclo Automatizado de Transporte na Mineração
-
-## 📋 Descrição
-
-O Minetrack é um aplicativo mobile que simula o ciclo completo de transporte de caminhões autônomos na mineração. O sistema interpreta automaticamente dados de sensores embarcados, identifica a etapa atual do ciclo e gerencia a sincronização offline/online dos dados.
-
-## 🎯 Funcionalidades
-
-### ✅ Implementadas
-
-- **Simulação de Dados**: Geração de dados simulados de sensores (GPS, beacons, velocidade)
-- **Interpretação de Ciclos**: Lógica de negócio para determinar as 6 etapas do ciclo:
-  1. EM FILA CARREGAMENTO
-  2. EM CARREGAMENTO
-  3. TRÂNSITO CHEIO
-  4. EM FILA BASCULAMENTO
-  5. EM BASCULAMENTO
-  6. TRÂNSITO VAZIO
-- **Interface Intuitiva**: Tela mobile com design industrial e informações em tempo real
-- **Sincronização Offline/Online**: Sistema de sincronização automática com arquivo de saída
-- **Armazenamento Local**: Ciclos completos salvos localmente
-- **Prevenção de Duplicação**: Controle de dados já sincronizados
-
-### 🔧 Tecnologias Utilizadas
-
-- **React Native CLI** - Framework mobile
-- **TypeScript** - Tipagem estática
-- **Restyle** - Sistema de design tokens
-- **Arquitetura de Serviços** - Separação de responsabilidades
-
-## 🚀 Instalação e Uso
-
-### Pré-requisitos
-
-- Node.js (versão 16 ou superior)
-- React Native CLI
-- Android Studio (para Android)
-- Xcode (para iOS - apenas macOS)
-
-### Instalação
-
-1. **Clone o repositório**
-
-```bash
-git clone https://github.com/seu-usuario/minetrack-app.git
-cd minetrack-app
-```
-
-2. **Instale as dependências**
-
-```bash
-npm install
-# ou
-yarn install
-```
-
-3. **Execute o aplicativo**
-
-**Android:**
-
-```bash
-npx react-native run-android
-```
-
-**iOS:**
-
-```bash
-cd ios && pod install && cd ..
-npx react-native run-ios
-```
-
-### Como Usar
-
-1. **Iniciar Simulação**: Pressione o botão "SIMULAR LEITURA" para processar dados de sensores
-2. **Acompanhar Progresso**: Observe a mudança das etapas do ciclo em tempo real
-3. **Resetar Simulação**: Use o botão "RESETAR" para reiniciar a simulação
-4. **Sincronizar Dados**: Pressione "SINCRONIZAR" para forçar a sincronização offline/online
-
-## 🏗️ Arquitetura e Decisões Técnicas
-
-### Estrutura do Projeto
-
-```
-src/
-├── components/          # Componentes reutilizáveis
-├── screens/            # Telas do aplicativo
-├── services/           # Lógica de negócio
-│   ├── CycleService.ts     # Gerenciamento de ciclos
-│   ├── SimulationService.ts # Geração de dados simulados
-│   ├── SyncService.ts      # Sincronização offline/online
-│   └── FileService.ts      # Operações de arquivo
-├── types/              # Definições TypeScript
-└── theme/              # Sistema de design
-```
-
-### Decisões Técnicas
-
-#### 1. **Arquitetura de Serviços**
-
-- **Separação de Responsabilidades**: Cada serviço tem uma responsabilidade específica
-- **Injeção de Dependências**: Serviços são injetados onde necessário
-- **Testabilidade**: Facilita a criação de testes unitários
-
-#### 2. **Sistema de Tipos**
-
-- **TypeScript**: Tipagem estática para maior segurança
-- **Interfaces Bem Definidas**: Estruturas claras para dados de sensores e ciclos
-- **Enums para Estados**: Tipos seguros para etapas do ciclo
-
-#### 3. **Gerenciamento de Estado**
-
-- **useState**: Para estado local da interface
-- **useRef**: Para referências a serviços
-- **useEffect**: Para efeitos colaterais e inicialização
-
-#### 4. **Sincronização Offline/Online**
-
-- **Armazenamento Local**: Ciclos salvos localmente primeiro
-- **Sincronização Automática**: Verificação periódica de conectividade
-- **Prevenção de Duplicação**: Controle de dados já sincronizados
-- **Arquivo de Saída**: Dados exportados para `sync_servidor.jsonl`
-
-### Lógica de Negócio - Etapas do Ciclo
-
-O sistema implementa as 6 etapas do ciclo conforme as regras de negócio:
-
-1. **EM FILA CARREGAMENTO**: Velocidade = 0 por 5s + escavadeira próxima + outros caminhões
-2. **EM CARREGAMENTO**: Velocidade = 0 por 5s + escavadeira < 2m + sem outros caminhões
-3. **TRÂNSITO CHEIO**: Velocidade > 0 + escavadeira > 2m + estado anterior = EM CARREGAMENTO
-4. **EM FILA BASCULAMENTO**: Velocidade = 0 por 5s + GPS no ponto + báscula inativa + fila
-5. **EM BASCULAMENTO**: Velocidade = 0 + GPS no ponto + báscula ativa
-6. **TRÂNSITO VAZIO**: Velocidade > 0 + GPS > 5m do ponto + estado anterior = EM BASCULAMENTO
-
-## 📁 Arquivos de Dados
-
-### Arquivo de Simulação
-
-- **Localização**: `assets/simulacao.jsonl`
-- **Formato**: JSON Lines (uma linha por leitura de sensor)
-- **Conteúdo**: Dados simulados de beacons, GPS e velocidade
-
-### Arquivo de Sincronização
-
-- **Localização**: `sync_servidor.jsonl` (gerado automaticamente)
-- **Formato**: JSON Lines (uma linha por ciclo completo)
-- **Conteúdo**: Dados de ciclos sincronizados com servidor
-
-### Estrutura dos Dados
-
-**Dados de Sensor:**
-
-```json
-{
-  "timestamp": 1703123456789,
-  "beacons": [
-    { "id": "ESC-002", "type": "escavadeira", "distance": 1.5 },
-    { "id": "CAM-002", "type": "caminhao", "distance": 3.0 }
-  ],
-  "gps": {
-    "latitude": -23.55,
-    "longitude": -46.63,
-    "velocity": 0
-  }
-}
-```
-
-**Dados de Sincronização:**
-
-```json
-{
-  "cycleId": "CYCLE_1703123456789_abc123",
-  "startTime": 1703123456789,
-  "endTime": 1703123522789,
-  "loadingEquipment": "ESC-002",
-  "dumpPoint": "GPS: -23.5505, -46.6333",
-  "totalDuration": 66000,
-  "stages": [...]
-}
-```
-
-## 🔄 Sincronização Offline → Online
-
-### Funcionamento
-
-1. **Modo Offline**: Ciclos são salvos localmente
-2. **Detecção de Rede**: Sistema verifica conectividade a cada 30s
-3. **Sincronização Automática**: Quando online, envia dados pendentes
-4. **Arquivo de Saída**: Dados exportados para `sync_servidor.jsonl`
-5. **Prevenção de Duplicação**: Ciclos sincronizados são marcados
-
-### Localização do Arquivo de Sincronização
-
-O arquivo `sync_servidor.jsonl` será gerado no diretório raiz do projeto quando houver dados para sincronizar.
-
-## 📱 Interface do Usuário
-
-### Elementos da Tela
-
-- **Título**: "Simulador de Ciclo"
-- **Botão Principal**: "SIMULAR LEITURA" (amarelo de mineração)
-- **Controles**: Botões "RESETAR" e "SINCRONIZAR"
-- **Painel de Status**: Informações em tempo real do ciclo
-- **Indicadores Visuais**: Ícones e cores para diferentes estados
-
-### Design
-
-- **Formato Mobile**: 9:16 otimizado para smartphones
-- **Cores Industriais**: Amarelo, verde, laranja (tema de mineração)
-- **Tipografia**: Poppins para melhor legibilidade
-- **Layout Responsivo**: Adaptável a diferentes tamanhos de tela
-
-## 🧪 Testes
-
-### Executar Testes
-
-```bash
-npm test
-# ou
-yarn test
-```
-
-### Cobertura de Testes
-
-- Testes unitários para serviços
-- Testes de integração para fluxos principais
-- Testes de interface para componentes
-
-## 📦 Build e Deploy
-
-### Gerar APK (Android)
-
-```bash
-cd android
-./gradlew assembleRelease
-```
-
-### Gerar IPA (iOS)
-
-```bash
-cd ios
-xcodebuild -workspace MinetrackApp.xcworkspace -scheme MinetrackApp -configuration Release archive
-```
-
-## 🔧 Configuração
-
-### Variáveis de Ambiente
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-# Configurações de sincronização
-SYNC_INTERVAL=30000
-SYNC_FAILURE_RATE=0.1
-
-# Configurações de simulação
-SIMULATION_STEPS=12
-VELOCITY_ZERO_THRESHOLD=5000
-```
-
-## 🐛 Dívidas Técnicas
-
-### Implementações Futuras
-
-1. **Persistência Real**: Implementar AsyncStorage para dados locais
-2. **API Real**: Integração com servidor real via HTTP
-3. **Notificações Push**: Alertas em tempo real
-4. **Múltiplos Equipamentos**: Suporte a vários caminhões
-5. **Dashboard Avançado**: Gráficos e métricas detalhadas
-6. **Modo Offline Completo**: Funcionamento sem internet
-7. **Testes E2E**: Testes automatizados de interface
-
-### Melhorias Técnicas
-
-1. **Performance**: Otimização de re-renders
-2. **Acessibilidade**: Suporte a leitores de tela
-3. **Internacionalização**: Múltiplos idiomas
-4. **Temas**: Modo escuro/claro
-5. **Animações**: Transições suaves entre estados
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
-## 👥 Contribuição
-
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
-
-## 📞 Suporte
-
-Para dúvidas ou suporte, entre em contato:
-
-- Email: suporte@minetrack.com
-- Issues: [GitHub Issues](https://github.com/seu-usuario/minetrack-app/issues)
+# MinetrackApp
+
+## 📦 Instalação
+
+1. **Baixe o APK de instalação:**  
+   [Link para download do APK](COLE_O_LINK_AQUI)
+
+2. **Instale em seu dispositivo Android:**  
+   Pode ser necessário permitir instalação de fontes desconhecidas nas configurações do aparelho.
+
+3. **Ou rode localmente:**
+   ```sh
+   git clone <repo>
+   cd MinetrackApp
+   npm install
+   npx react-native run-android
+   ```
 
 ---
 
-**Desenvolvido com ❤️ para a indústria de mineração**
+## ▶️ Como usar
+
+- Abra o app e clique em **SIMULAR LEITURA** para simular o ciclo do caminhão.
+- A interface exibirá:
+  - **Etapa Atual**: status determinado pela lógica
+  - **Equipamento de Carga**: conforme leitura
+  - **Ponto de Basculamento**: conforme leitura
+  - **Velocidade Atual**: convertida de m/s para km/h
+  - **Dados Sincronizados**: indica se há pendências ou se tudo foi enviado
+- O ciclo completo é registrado automaticamente.
+- Quando a rede for detectada (simulada), os ciclos completos são exportados para o arquivo `sync_servidor.jsonl`.
+
+---
+
+## 📂 Local do Arquivo de Exportação
+
+- O arquivo `sync_servidor.jsonl` é gerado em:
+  ```
+  [storage interno do app]/files/sync_servidor.jsonl
+  ```
+  - Em dispositivos Android, normalmente:
+    `/data/data/com.minetrackapp/files/sync_servidor.jsonl`
+  - Para acessar, use um gerenciador de arquivos com acesso root ou o Android Studio Device File Explorer.
+
+---
+
+## 🏗️ Arquitetura de Software
+
+O projeto segue uma arquitetura **modular e orientada a serviços**, visando clareza, testabilidade e facilidade de manutenção. As principais camadas e padrões utilizados são:
+
+### **1. Camada de Componentes (src/components/)**
+
+- Componentes visuais reutilizáveis (ex: Box, Button, Icon, Text, Screen)
+- Responsáveis apenas pela apresentação e interação visual
+
+### **2. Camada de Telas (src/screens/)**
+
+- Cada tela representa um fluxo principal do app (Home, Settings, History)
+- Usa componentes e hooks para montar a interface e lógica de interação
+
+### **3. Camada de Serviços (src/services/)**
+
+- **SimulationService**: Gerencia a leitura linha a linha dos dados simulados
+- **CycleService**: Implementa toda a lógica de negócio para identificar etapas do ciclo, registrar e completar ciclos
+- **SyncService**: Gerencia a sincronização offline/online, controle de pendências e exportação para arquivo
+- **FileService**: Responsável por leitura/escrita de arquivos locais (JSONL)
+- **StorageService**: Abstrai o uso do AsyncStorage para persistência local
+
+### **4. Tipos e Modelos (src/types/)**
+
+- Todas as estruturas de dados (SensorData, CycleData, SyncData, etc.) são fortemente tipadas em TypeScript
+- Facilita a validação, manutenção e evolução do código
+
+### **5. Hooks Customizados (src/hooks/)**
+
+- Hooks para lógica de interface e integração com serviços (ex: useHomeScreen)
+
+### **Padrões e Decisões**
+
+- **Injeção de dependências via hooks e refs**: Serviços são instanciados e referenciados por hooks, facilitando testes e isolamento
+- **Separação de responsabilidades**: Cada serviço tem uma responsabilidade única e clara
+- **Baixo acoplamento**: Telas e componentes não conhecem detalhes internos dos serviços
+- **Fácil testabilidade**: Lógica de negócio pode ser testada isoladamente
+
+### **Motivação**
+
+Essa arquitetura foi escolhida para garantir:
+
+- **Escalabilidade**: Fácil adicionar novas telas, sensores ou regras de negócio
+- **Manutenção**: Mudanças em uma camada não afetam as demais
+- **Testes**: Serviços e lógica de ciclo podem ser testados sem interface
+- **Clareza**: Código organizado, fácil de entender e evoluir
+
+---
+
+## ❗ Dívidas Técnicas
+
+---
+
+**Dúvidas ou sugestões? Fique à vontade para abrir uma issue ou entrar em contato!**

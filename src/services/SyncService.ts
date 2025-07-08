@@ -1,15 +1,41 @@
 import { SyncData } from '../types/cycle';
 import { CycleService } from './CycleService';
 import { FileService } from './FileService';
+import { StorageService } from './StorageService';
 
 export class SyncService {
   private cycleService: CycleService;
   private isOnline = false;
   private syncInterval: NodeJS.Timeout | null = null;
+  private lastSyncTime: Date | null = null;
+  private syncedCycleIds: Set<string> = new Set();
 
   constructor(cycleService: CycleService) {
     this.cycleService = cycleService;
+    this.loadSyncedCycleIds();
     this.startSyncCheck();
+  }
+
+  private async loadSyncedCycleIds(): Promise<void> {
+    try {
+      // Carregar IDs de ciclos já sincronizados do AsyncStorage
+      const syncedIds = await StorageService.getSyncedCycleIds();
+      this.syncedCycleIds = new Set(syncedIds);
+      console.log(
+        `Carregados ${this.syncedCycleIds.size} IDs de ciclos sincronizados`,
+      );
+    } catch (error) {
+      console.error('Erro ao carregar IDs sincronizados:', error);
+      this.syncedCycleIds = new Set();
+    }
+  }
+
+  private async saveSyncedCycleIds(): Promise<void> {
+    try {
+      await StorageService.saveSyncedCycleIds(Array.from(this.syncedCycleIds));
+    } catch (error) {
+      console.error('Erro ao salvar IDs sincronizados:', error);
+    }
   }
 
   private startSyncCheck(): void {
@@ -22,10 +48,16 @@ export class SyncService {
   private checkConnectivity(): void {
     // Simular verificação de conectividade
     // Em um app real, isso seria uma verificação real de rede
+    const wasOffline = !this.isOnline;
     this.isOnline = Math.random() > 0.3; // 70% de chance de estar online
 
     if (this.isOnline) {
+      console.log('🌐 Rede detectada - Iniciando sincronização automática');
       this.syncPendingData();
+    } else if (wasOffline) {
+      console.log(
+        '📡 Modo offline - Dados serão sincronizados quando rede estiver disponível',
+      );
     }
   }
 
@@ -38,20 +70,41 @@ export class SyncService {
         return true;
       }
 
-      const syncData = this.cycleService.getSyncData();
+      // Filtrar apenas ciclos que ainda não foram sincronizados
+      const newCycles = unsynchronizedCycles.filter(
+        cycle => !this.syncedCycleIds.has(cycle.id),
+      );
+
+      if (newCycles.length === 0) {
+        console.log('Todos os ciclos já foram sincronizados');
+        return true;
+      }
+
+      const syncData = newCycles.map(cycle => ({
+        cycleId: cycle.id,
+        startTime: cycle.startTime,
+        endTime: cycle.endTime!,
+        loadingEquipment: cycle.loadingEquipment || 'N/A',
+        dumpPoint: cycle.dumpPoint || 'N/A',
+        totalDuration: cycle.endTime! - cycle.startTime,
+        stages: cycle.stages,
+      }));
 
       // Simular envio para servidor
       const success = await this.sendToServer(syncData);
 
       if (success) {
         // Marcar ciclos como sincronizados
-        unsynchronizedCycles.forEach(cycle => {
+        newCycles.forEach(cycle => {
           this.cycleService.markCycleAsSynchronized(cycle.id);
+          this.syncedCycleIds.add(cycle.id);
         });
 
-        console.log(
-          `${unsynchronizedCycles.length} ciclos sincronizados com sucesso`,
-        );
+        // Salvar IDs sincronizados
+        await this.saveSyncedCycleIds();
+
+        this.lastSyncTime = new Date();
+        console.log(`${newCycles.length} ciclos sincronizados com sucesso`);
         return true;
       }
 
@@ -79,7 +132,8 @@ export class SyncService {
       const success = await FileService.saveSyncData(syncData);
 
       if (success) {
-        console.log('Dados salvos em sync_servidor.jsonl:', syncData);
+        console.log('✅ Dados sincronizados salvos em sync_servidor.jsonl');
+        console.log(`📊 ${syncData.length} ciclos completos exportados`);
       }
 
       return success;
@@ -93,13 +147,18 @@ export class SyncService {
     isOnline: boolean;
     pendingCycles: number;
     lastSyncTime?: Date;
+    syncedCycles: number;
   } {
-    const pendingCycles = this.cycleService.getUnsynchronizedCycles().length;
+    const unsynchronizedCycles = this.cycleService.getUnsynchronizedCycles();
+    const pendingCycles = unsynchronizedCycles.filter(
+      cycle => !this.syncedCycleIds.has(cycle.id),
+    ).length;
 
     return {
       isOnline: this.isOnline,
       pendingCycles,
-      lastSyncTime: pendingCycles === 0 ? new Date() : undefined,
+      lastSyncTime: this.lastSyncTime || undefined,
+      syncedCycles: this.syncedCycleIds.size,
     };
   }
 
@@ -112,6 +171,32 @@ export class SyncService {
 
     if (isOnline) {
       this.syncPendingData();
+    }
+  }
+
+  public async getSyncFileInfo(): Promise<{
+    exists: boolean;
+    path: string;
+    size?: number;
+    lineCount?: number;
+  }> {
+    return await FileService.getSyncFileInfo();
+  }
+
+  public async clearSyncData(): Promise<boolean> {
+    try {
+      // Limpar arquivo de sincronização
+      await FileService.clearSyncFile();
+
+      // Limpar IDs sincronizados
+      this.syncedCycleIds.clear();
+      await this.saveSyncedCycleIds();
+
+      console.log('Dados de sincronização limpos');
+      return true;
+    } catch (error) {
+      console.error('Erro ao limpar dados de sincronização:', error);
+      return false;
     }
   }
 
