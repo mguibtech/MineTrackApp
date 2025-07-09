@@ -1,7 +1,7 @@
 import { SyncData } from '../types/cycle';
 import { CycleService } from './CycleService';
 import { FileService } from './FileService';
-import { StorageService } from './StorageService';
+import { useCycleStore } from '../store/useCycleStore';
 
 export class SyncService {
   private cycleService: CycleService;
@@ -18,8 +18,9 @@ export class SyncService {
 
   private async loadSyncedCycleIds(): Promise<void> {
     try {
-      // Carregar IDs de ciclos já sincronizados do AsyncStorage
-      const syncedIds = await StorageService.getSyncedCycleIds();
+      // Carregar IDs de ciclos já sincronizados do store
+      const store = useCycleStore.getState();
+      const syncedIds = store.getSyncedCycleIds();
       this.syncedCycleIds = new Set(syncedIds);
       console.log(
         `Carregados ${this.syncedCycleIds.size} IDs de ciclos sincronizados`,
@@ -32,7 +33,8 @@ export class SyncService {
 
   private async saveSyncedCycleIds(): Promise<void> {
     try {
-      await StorageService.saveSyncedCycleIds(Array.from(this.syncedCycleIds));
+      const store = useCycleStore.getState();
+      store.addSyncedCycleIds(Array.from(this.syncedCycleIds));
     } catch (error) {
       console.error('Erro ao salvar IDs sincronizados:', error);
     }
@@ -102,6 +104,10 @@ export class SyncService {
 
         // Salvar IDs sincronizados
         await this.saveSyncedCycleIds();
+
+        // Registrar log de exportação
+        const exportedIds = newCycles.map(c => c.id);
+        await FileService.logExport(exportedIds, exportedIds.length);
 
         this.lastSyncTime = new Date();
         console.log(`${newCycles.length} ciclos sincronizados com sucesso`);

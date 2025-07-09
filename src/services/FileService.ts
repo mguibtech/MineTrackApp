@@ -269,4 +269,56 @@ export class FileService {
   public static getOutputFilePath(): string {
     return `${RNFS.DocumentDirectoryPath}/${this.OUTPUT_FILE}`;
   }
+
+  // Adiciona um registro de log de exportação
+  public static async logExport(
+    cycleIds: string[],
+    count: number,
+  ): Promise<void> {
+    try {
+      const logEntry = {
+        data: new Date().toISOString(),
+        quantidade: count,
+        ciclos: cycleIds,
+      };
+      const logLine = JSON.stringify(logEntry);
+      const logPath = `${RNFS.DocumentDirectoryPath}/export_log.jsonl`;
+      let existingContent = '';
+      try {
+        existingContent = await RNFS.readFile(logPath, 'utf8');
+      } catch (e) {}
+      const newContent = existingContent
+        ? existingContent + '\n' + logLine
+        : logLine;
+      await RNFS.writeFile(logPath, newContent, 'utf8');
+    } catch (error) {
+      console.error('Erro ao registrar log de exportação:', error);
+    }
+  }
+
+  // Lê o histórico de exportações
+  public static async readExportLog(): Promise<
+    Array<{ data: string; quantidade: number; ciclos: string[] }>
+  > {
+    try {
+      const logPath = `${RNFS.DocumentDirectoryPath}/export_log.jsonl`;
+      const exists = await RNFS.exists(logPath);
+      if (!exists) return [];
+      const content = await RNFS.readFile(logPath, 'utf8');
+      return content
+        .split('\n')
+        .filter(line => line.trim() !== '')
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+    } catch (error) {
+      console.error('Erro ao ler log de exportação:', error);
+      return [];
+    }
+  }
 }

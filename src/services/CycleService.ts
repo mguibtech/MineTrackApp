@@ -1,5 +1,5 @@
 import { SensorData, CycleStage, CycleData, SyncData } from '../types/cycle';
-import { StorageService } from './StorageService';
+import { useCycleStore } from '../store/useCycleStore';
 
 export class CycleService {
   private currentCycle: CycleData | null = null;
@@ -16,7 +16,8 @@ export class CycleService {
 
   private async loadCycles() {
     try {
-      const savedCycles = await StorageService.getCycleStatuses();
+      const store = useCycleStore.getState();
+      const savedCycles = store.getCycleStatuses();
       // Filtrar apenas ciclos completos
       this.cycles = savedCycles
         .filter(status => status.stage === 'TRÂNSITO VAZIO')
@@ -45,7 +46,9 @@ export class CycleService {
 
   private async saveCycles() {
     try {
-      // Salvar ciclos completos no AsyncStorage
+      const store = useCycleStore.getState();
+
+      // Salvar ciclos completos no store
       const cycleStatuses = this.cycles.map(cycle => ({
         id: cycle.id,
         timestamp: cycle.endTime || Date.now(),
@@ -66,7 +69,7 @@ export class CycleService {
 
       // Salvar cada ciclo individualmente
       for (const status of cycleStatuses) {
-        await StorageService.saveCycleStatus(status);
+        store.saveCycleStatus(status);
       }
 
       console.log(`${this.cycles.length} ciclos salvos localmente`);

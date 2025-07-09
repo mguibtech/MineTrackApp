@@ -1,112 +1,168 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SensorData, CycleData } from '../types/cycle';
 
-export type CicloEtapa =
-  | 'EM_CARREGAMENTO'
-  | 'TRANSITO_CHEIO'
-  | 'EM_FILA_BASCULAMENTO'
-  | 'EM_BASCULAMENTO'
-  | 'TRANSITO_VAZIO';
-
-export interface EtapaCiclo {
-  etapa: CicloEtapa;
-  velocidade: number;
-  lat: number;
-  lon: number;
-  timestamp: string;
-  infoExtra?: string;
-}
-
-export interface CicloCompleto {
+export interface CycleStatus {
   id: string;
-  inicio: string;
-  fim: string;
-  etapas: EtapaCiclo[];
-  sincronizado: boolean;
+  timestamp: number;
+  stage: string;
+  speed: string;
+  loadingEquipment: string;
+  dumpPoint: string;
+  isSynchronized: boolean;
+  pendingCycles: number;
+  sensorData: SensorData;
 }
 
 interface CycleStore {
-  ciclos: CicloCompleto[];
-  adicionarCiclo: (ciclo: CicloCompleto) => void;
-  marcarSincronizado: (id: string) => void;
-  limpar: () => void;
-  adicionarCicloMock: () => void;
+  // Estado dos ciclos
+  cycles: CycleData[];
+  cycleStatuses: CycleStatus[];
+
+  // Estado da simulação
+  simulationProgress: number;
+
+  // Estado de sincronização
+  syncedCycleIds: string[];
+
+  // Ações para ciclos
+  addCycle: (cycle: CycleData) => void;
+  updateCycle: (id: string, updates: Partial<CycleData>) => void;
+  markCycleSynchronized: (id: string) => void;
+  getUnsynchronizedCycles: () => CycleData[];
+
+  // Ações para status dos ciclos
+  saveCycleStatus: (status: CycleStatus) => void;
+  getCycleStatuses: () => CycleStatus[];
+
+  // Ações para simulação
+  setSimulationProgress: (progress: number) => void;
+  getSimulationProgress: () => number;
+
+  // Ações para sincronização
+  addSyncedCycleIds: (ids: string[]) => void;
+  getSyncedCycleIds: () => string[];
+  isCycleSynced: (id: string) => boolean;
+
+  // Ações gerais
+  clearAllData: () => void;
+
+  // Notificações de exportação
+  lastExportTime: number | null;
+  notifyExportUpdate: () => void;
+  setLastExportTime: (time: number) => void;
 }
 
-// Dados mock para demonstração
-const mockCiclos: CicloCompleto[] = [
-  {
-    id: 'CAM-001',
-    inicio: '2024-01-15T08:00:00.000Z',
-    fim: '2024-01-15T08:25:00.000Z',
-    sincronizado: true,
-    etapas: [
-      {
-        etapa: 'EM_CARREGAMENTO',
-        velocidade: 0,
-        lat: 36.12,
-        lon: -115.17,
-        timestamp: '2024-01-15T08:02:00.000Z',
-        infoExtra: 'Equipamentos próximos',
-      },
-      {
-        etapa: 'TRANSITO_CHEIO',
-        velocidade: 32,
-        lat: 36.1,
-        lon: -115.2,
-        timestamp: '2024-01-15T08:10:00.000Z',
-      },
-      {
-        etapa: 'EM_FILA_BASCULAMENTO',
-        velocidade: 2,
-        lat: 36.1,
-        lon: -115.2,
-        timestamp: '2024-01-15T08:15:00.000Z',
-      },
-      {
-        etapa: 'EM_BASCULAMENTO',
-        velocidade: 0,
-        lat: 36.1,
-        lon: -115.2,
-        timestamp: '2024-01-15T08:18:00.000Z',
-      },
-      {
-        etapa: 'TRANSITO_VAZIO',
-        velocidade: 28,
-        lat: 36.11,
-        lon: -115.21,
-        timestamp: '2024-01-15T08:23:00.000Z',
-      },
-    ],
-  },
-  // Você pode adicionar outros ciclos mockados aqui, se quiser mais de um exemplo
-];
+export const useCycleStore = create<CycleStore>()(
+  persist(
+    (set, get) => ({
+      // Estado inicial
+      cycles: [],
+      cycleStatuses: [],
+      simulationProgress: 0,
+      syncedCycleIds: [],
+      lastExportTime: null,
 
-export const useCycleStore = create<CycleStore>(set => ({
-  ciclos: mockCiclos,
-  adicionarCiclo: ciclo => set(state => ({ ciclos: [...state.ciclos, ciclo] })),
-  marcarSincronizado: id =>
-    set(state => ({
-      ciclos: state.ciclos.map(c =>
-        c.id === id ? { ...c, sincronizado: true } : c,
-      ),
-    })),
-  limpar: () => set({ ciclos: [] }),
-  adicionarCicloMock: () => {
-    const novoCiclo: CicloCompleto = {
-      id: `CAM-${String(mockCiclos.length + 1).padStart(3, '0')}`,
-      inicio: new Date().toISOString(),
-      fim: new Date(Date.now() + 25 * 60 * 1000).toISOString(), // 25 minutos depois
-      sincronizado: Math.random() > 0.5,
-      etapas: [
-        {
-          etapa: 'EM_CARREGAMENTO',
-          velocidade: 0,
-          lat: -23.5505,
-          lon: -46.6333,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    };
-    set(state => ({ ciclos: [novoCiclo, ...state.ciclos] }));
-  },
-}));
+      // Ações para ciclos
+      addCycle: cycle => {
+        set(state => ({
+          cycles: [...state.cycles, cycle],
+        }));
+      },
+
+      updateCycle: (id, updates) => {
+        set(state => ({
+          cycles: state.cycles.map(cycle =>
+            cycle.id === id ? { ...cycle, ...updates } : cycle,
+          ),
+        }));
+      },
+
+      markCycleSynchronized: id => {
+        set(state => ({
+          cycles: state.cycles.map(cycle =>
+            cycle.id === id ? { ...cycle, isSynchronized: true } : cycle,
+          ),
+          syncedCycleIds: [...state.syncedCycleIds, id],
+        }));
+      },
+
+      getUnsynchronizedCycles: () => {
+        const state = get();
+        return state.cycles.filter(cycle => !cycle.isSynchronized);
+      },
+
+      // Ações para status dos ciclos
+      saveCycleStatus: status => {
+        set(state => {
+          const existingData = [...state.cycleStatuses, status];
+          // Manter apenas os últimos 100 registros
+          const limitedData = existingData.slice(-100);
+          return {
+            cycleStatuses: limitedData,
+          };
+        });
+      },
+
+      getCycleStatuses: () => {
+        return get().cycleStatuses;
+      },
+
+      // Ações para simulação
+      setSimulationProgress: progress => {
+        set({ simulationProgress: progress });
+      },
+
+      getSimulationProgress: () => {
+        return get().simulationProgress;
+      },
+
+      // Ações para sincronização
+      addSyncedCycleIds: ids => {
+        set(state => ({
+          syncedCycleIds: [...new Set([...state.syncedCycleIds, ...ids])],
+        }));
+      },
+
+      getSyncedCycleIds: () => {
+        return get().syncedCycleIds;
+      },
+
+      isCycleSynced: id => {
+        return get().syncedCycleIds.includes(id);
+      },
+
+      // Ações gerais
+      clearAllData: () => {
+        set({
+          cycles: [],
+          cycleStatuses: [],
+          simulationProgress: 0,
+          syncedCycleIds: [],
+          lastExportTime: null,
+        });
+      },
+
+      // Notificações de exportação
+      notifyExportUpdate: () => {
+        set({ lastExportTime: Date.now() });
+      },
+
+      setLastExportTime: time => {
+        set({ lastExportTime: time });
+      },
+    }),
+    {
+      name: 'cycle-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: state => ({
+        cycles: state.cycles,
+        cycleStatuses: state.cycleStatuses,
+        simulationProgress: state.simulationProgress,
+        syncedCycleIds: state.syncedCycleIds,
+        lastExportTime: state.lastExportTime,
+      }),
+    },
+  ),
+);

@@ -3,39 +3,34 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { AppStackParamList } from "@routes";
 
-export const cycles = [
-    {
-        id: 'CAM-001',
-        status: 'synced',
-        start: '08:00',
-        end: '08:25',
-        steps: 6,
-    },
-    {
-        id: 'CAM-002',
-        status: 'pending',
-        start: '07:30',
-        end: '07:55',
-        steps: 6,
-    },
-    {
-        id: 'CAM-004',
-        status: 'pending',
-        start: '06:15',
-        end: '06:50',
-        steps: 6,
-    },
-    {
-        id: 'CAM-004',
-        status: 'synced',
-        start: '05:00',
-        end: '05:35',
-        steps: 6,
-    },
-];
+export interface ExportLogItem {
+    data: string;
+    quantidade: number;
+    ciclos: string[];
+}
 
-export function ItemHistory({ item }: { item: typeof cycles[0] }) {
-    const navigation = useNavigation<StackNavigationProp<AppStackParamList, 'AppTabNavigation'>>();
+export function ItemHistory({ item }: { item: ExportLogItem }) {
+    const navigation = useNavigation<StackNavigationProp<AppStackParamList>>();
+
+    // Pegar o primeiro ciclo da lista para exibir como exemplo
+    const firstCycleId = item.ciclos[0] || 'CAM-001';
+
+    // Formatar a data
+    const formatDate = (dateString: string) => {
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            }) + ' ' + date.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch {
+            return dateString;
+        }
+    };
 
     return (
         <Box
@@ -56,37 +51,37 @@ export function ItemHistory({ item }: { item: typeof cycles[0] }) {
                 {/* Linha: título + status */}
                 <Box flexDirection="row" alignItems="center" justifyContent="space-between" mb="s8">
                     <Text fontWeight="bold" color="grayBlack" fontSize={26}>
-                        {item.id}
+                        {firstCycleId}
                     </Text>
                     <Box flexDirection="row" alignItems="center">
                         <Icon
-                            name={item.status === 'synced' ? 'checkRound' : 'errorRound'}
+                            name="checkRound"
                             size={20}
-                            color={item.status === 'synced' ? 'greenSuccess' : 'redError'}
+                            color="greenSuccess"
                         />
                         <Text
                             ml="s4"
-                            color={item.status === 'synced' ? 'greenSuccess' : 'redError'}
+                            color="greenSuccess"
                             fontWeight="bold"
                             fontSize={18}
                         >
-                            {item.status === 'synced' ? 'Sincronizado' : 'Pendente'}
+                            Sincronizado
                         </Text>
                     </Box>
                 </Box>
-                {/* Linha: horários */}
+                {/* Linha: data de exportação */}
                 <Text color="grayBlack" fontSize={18} mb="s4">
-                    {item.start} → {item.end}
+                    {formatDate(item.data)}
                 </Text>
-                {/* Linha: etapas */}
+                {/* Linha: quantidade de ciclos */}
                 <Text color="grayBlack" fontSize={18} mb="s8">
-                    {item.steps} etapas
+                    {item.quantidade} ciclo{item.quantidade > 1 ? 's' : ''} exportado{item.quantidade > 1 ? 's' : ''}
                 </Text>
             </Box>
             {/* Coluna direita: botão */}
             <Button
                 title="Ver detalhes"
-                onPress={() => navigation.navigate('DetailScreen', { cycleId: item.id })}
+                onPress={() => navigation.navigate('DetailScreen', { cycleId: firstCycleId })}
                 preset="outline"
                 borderColor="grayBlack"
                 borderRadius="s8"

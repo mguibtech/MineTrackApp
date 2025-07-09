@@ -1,8 +1,9 @@
 import { IconProps } from '@components';
-import { CycleService, SimulationService, StorageService } from '@services';
+import { CycleService, SimulationService, FileService } from '@services';
 import { SyncService } from '@services';
 import { CycleStage } from '@types';
-import { useEffect, useRef, useState } from 'react';
+import { useCycleStore } from '../../store/useCycleStore';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 
 export const useHomeScreen = () => {
@@ -21,6 +22,45 @@ export const useHomeScreen = () => {
   const cycleServiceRef = useRef<CycleService | null>(null);
   const simulationServiceRef = useRef<SimulationService | null>(null);
   const syncServiceRef = useRef<SyncService | null>(null);
+  const {
+    notifyExportUpdate,
+    saveCycleStatus,
+    getCycleStatuses,
+    getSimulationProgress,
+  } = useCycleStore();
+
+  const loadLastStatus = useCallback(async () => {
+    try {
+      const cycleStatuses = getCycleStatuses();
+      const lastStatus =
+        cycleStatuses.length > 0
+          ? cycleStatuses[cycleStatuses.length - 1]
+          : null;
+      if (lastStatus) {
+        setCurrentStage(lastStatus.stage as CycleStage);
+        setCurrentSpeed(lastStatus.speed);
+        setLoadingEquipment(lastStatus.loadingEquipment);
+        setDumpPoint(lastStatus.dumpPoint);
+        setIsSynchronized(lastStatus.isSynchronized);
+        setPendingCycles(lastStatus.pendingCycles);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar último status:', error);
+    }
+  }, [getCycleStatuses]);
+
+  const loadSimulationProgress = useCallback(async () => {
+    try {
+      const progress = getSimulationProgress();
+      setSimulationProgress(progress);
+
+      if (simulationServiceRef.current) {
+        setTotalLines(simulationServiceRef.current.getTotalSteps());
+      }
+    } catch (error) {
+      console.error('Erro ao carregar progresso da simulação:', error);
+    }
+  }, [getSimulationProgress]);
 
   useEffect(() => {
     cycleServiceRef.current = new CycleService();
@@ -45,36 +85,7 @@ export const useHomeScreen = () => {
         syncServiceRef.current.destroy();
       }
     };
-  }, []);
-
-  const loadLastStatus = async () => {
-    try {
-      const lastStatus = await StorageService.getLastCycleStatus();
-      if (lastStatus) {
-        setCurrentStage(lastStatus.stage as CycleStage);
-        setCurrentSpeed(lastStatus.speed);
-        setLoadingEquipment(lastStatus.loadingEquipment);
-        setDumpPoint(lastStatus.dumpPoint);
-        setIsSynchronized(lastStatus.isSynchronized);
-        setPendingCycles(lastStatus.pendingCycles);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar último status:', error);
-    }
-  };
-
-  const loadSimulationProgress = async () => {
-    try {
-      const progress = await StorageService.getSimulationProgress();
-      setSimulationProgress(progress);
-
-      if (simulationServiceRef.current) {
-        setTotalLines(simulationServiceRef.current.getTotalSteps());
-      }
-    } catch (error) {
-      console.error('Erro ao carregar progresso da simulação:', error);
-    }
-  };
+  }, [loadLastStatus, loadSimulationProgress]);
 
   const saveCurrentStatus = async (sensorData: any) => {
     try {
@@ -90,9 +101,29 @@ export const useHomeScreen = () => {
         sensorData,
       };
 
-      await StorageService.saveCycleStatus(status);
+      saveCycleStatus(status);
     } catch (error) {
       console.error('Erro ao salvar status:', error);
+    }
+  };
+
+  const exportAfterRead = async () => {
+    if (!cycleServiceRef.current) return;
+    // Exportar todos os ciclos completos não sincronizados
+    const unsynced = cycleServiceRef.current.getUnsynchronizedCycles();
+    if (unsynced.length > 0) {
+      const syncData = unsynced.map(cycle => ({
+        cycleId: cycle.id,
+        startTime: cycle.startTime,
+        endTime: cycle.endTime!,
+        loadingEquipment: cycle.loadingEquipment || 'N/A',
+        dumpPoint: cycle.dumpPoint || 'N/A',
+        totalDuration: cycle.endTime! - cycle.startTime,
+        stages: cycle.stages,
+      }));
+      await FileService.saveSyncData(syncData);
+      // Notificar atualização para a tela de histórico
+      notifyExportUpdate();
     }
   };
 
@@ -122,6 +153,9 @@ export const useHomeScreen = () => {
 
       // Salvar status no AsyncStorage
       await saveCurrentStatus(sensorData);
+
+      // Exportar após cada leitura
+      await exportAfterRead();
 
       if (result.isNewCycle) {
         Alert.alert('Novo Ciclo', 'Iniciado novo ciclo de transporte');

@@ -3,19 +3,20 @@ import { useCycleStore } from '../store/useCycleStore';
 import { exportCiclosParaJsonl } from '../utils/exportJsonl';
 
 export const useSyncCiclos = () => {
-  const { ciclos, marcarSincronizado } = useCycleStore();
+  const { cycles, markCycleSynchronized, notifyExportUpdate } = useCycleStore();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
-      const path = await exportCiclosParaJsonl(ciclos);
-      ciclos
-        .filter(c => !c.sincronizado)
-        .forEach(c => marcarSincronizado(c.id));
+      const path = await exportCiclosParaJsonl(cycles);
+      cycles
+        .filter(c => !c.isSynchronized)
+        .forEach(c => markCycleSynchronized(c.id));
+      notifyExportUpdate();
       return path;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ciclos'] });
+      queryClient.invalidateQueries({ queryKey: ['cycles'] });
     },
   });
 };

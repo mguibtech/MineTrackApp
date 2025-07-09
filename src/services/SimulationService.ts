@@ -1,5 +1,5 @@
 import { SensorData, Beacon } from '../types/cycle';
-import { StorageService } from './StorageService';
+import { useCycleStore } from '../store/useCycleStore';
 
 export class SimulationService {
   private currentLine = 0;
@@ -13,7 +13,8 @@ export class SimulationService {
   private async loadSimulationFile(): Promise<void> {
     try {
       // Carregar progresso salvo
-      this.currentLine = await StorageService.getSimulationProgress();
+      const store = useCycleStore.getState();
+      this.currentLine = store.getSimulationProgress();
 
       // Usar dados embutidos do arquivo simulacao.jsonl
       // Simulando um ciclo completo com todas as etapas
@@ -109,7 +110,8 @@ export class SimulationService {
     if (this.currentLine >= this.simulationLines.length) {
       // Reiniciar simulação quando chegar ao final
       this.currentLine = 0;
-      await StorageService.saveSimulationProgress(this.currentLine);
+      const store = useCycleStore.getState();
+      store.setSimulationProgress(this.currentLine);
     }
 
     if (this.simulationLines.length === 0) {
@@ -135,7 +137,8 @@ export class SimulationService {
 
       // Salvar progresso
       this.currentLine++;
-      await StorageService.saveSimulationProgress(this.currentLine);
+      const store = useCycleStore.getState();
+      store.setSimulationProgress(this.currentLine);
 
       return updatedData;
     } catch (error) {
@@ -147,7 +150,8 @@ export class SimulationService {
 
   public resetSimulation(): void {
     this.currentLine = 0;
-    StorageService.saveSimulationProgress(this.currentLine);
+    const store = useCycleStore.getState();
+    store.setSimulationProgress(this.currentLine);
   }
 
   public getCurrentStep(): number {

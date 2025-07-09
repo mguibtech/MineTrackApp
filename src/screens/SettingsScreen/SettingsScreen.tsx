@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Switch, Alert } from "react-native";
 import { Screen, Box, Text, TouchableOpacityBox, Button } from "@components";
-import { StorageService } from "@services";
 import { FileService } from "@services";
+import { useCycleStore } from "../../store/useCycleStore";
 
 export const SettingsScreen = () => {
     const [networkAvailable, setNetworkAvailable] = useState(false);
@@ -20,6 +20,7 @@ export const SettingsScreen = () => {
         syncedCycles: number;
     } | null>(null);
 
+    const { clearAllData } = useCycleStore();
     const simulationFile = "simulacao.jsonl";
 
     useEffect(() => {
@@ -52,7 +53,7 @@ export const SettingsScreen = () => {
                     onPress: async () => {
                         setIsClearing(true);
                         try {
-                            await StorageService.clearAllData();
+                            clearAllData();
                             await FileService.clearSyncFile();
                             await loadSyncInfo();
                             Alert.alert("Sucesso", "Todos os dados foram limpos com sucesso!");
