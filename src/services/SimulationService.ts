@@ -1,5 +1,6 @@
 import { SensorData, Beacon } from '../types/cycle';
 import { useCycleStore } from '../store/useCycleStore';
+import { FileService } from './FileService';
 
 export class SimulationService {
   private currentLine = 0;
@@ -134,6 +135,21 @@ export class SimulationService {
         ...parsedData,
         timestamp: now + timeOffset,
       };
+
+      // Salvar a leitura de linha de forma assíncrona
+      const currentLineNumber = this.currentLine;
+      FileService.saveLineReading(currentLineNumber, updatedData)
+        .then(() => {
+          console.log(
+            `✅ Leitura da linha ${currentLineNumber} salva na memória`,
+          );
+        })
+        .catch(error => {
+          console.error(
+            `❌ Erro ao salvar leitura da linha ${currentLineNumber}:`,
+            error,
+          );
+        });
 
       // Salvar progresso
       this.currentLine++;

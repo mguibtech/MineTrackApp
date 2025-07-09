@@ -1,10 +1,15 @@
 import { IconProps } from '@components';
-import { CycleService, SimulationService, FileService } from '@services';
-import { SyncService } from '@services';
+import {
+  CycleService,
+  SimulationService,
+  FileService,
+  NetworkSyncService,
+} from '@services';
 import { CycleStage } from '@types';
 import { useCycleStore } from '../../store/useCycleStore';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Alert } from 'react-native';
+import { useNetworkStatus } from '@hooks';
 
 export const useHomeScreen = () => {
   const [isSimulating, setIsSimulating] = useState(false);
@@ -21,13 +26,11 @@ export const useHomeScreen = () => {
 
   const cycleServiceRef = useRef<CycleService | null>(null);
   const simulationServiceRef = useRef<SimulationService | null>(null);
-  const syncServiceRef = useRef<SyncService | null>(null);
-  const {
-    notifyExportUpdate,
-    saveCycleStatus,
-    getCycleStatuses,
-    getSimulationProgress,
-  } = useCycleStore();
+  const networkSyncServiceRef = useRef<NetworkSyncService | null>(null);
+  const networkStatus = useNetworkStatus();
+
+  const { saveCycleStatus, getCycleStatuses, getSimulationProgress } =
+    useCycleStore();
 
   const loadLastStatus = useCallback(async () => {
     try {
@@ -65,15 +68,26 @@ export const useHomeScreen = () => {
   useEffect(() => {
     cycleServiceRef.current = new CycleService();
     simulationServiceRef.current = new SimulationService();
-    syncServiceRef.current = new SyncService(cycleServiceRef.current);
+    networkSyncServiceRef.current = new NetworkSyncService(
+      cycleServiceRef.current,
+    );
 
     // Carregar último status salvo
     loadLastStatus();
     loadSimulationProgress();
 
+    // Limpar leituras antigas periodicamente (a cada 24 horas)
+    const cleanupInterval = setInterval(async () => {
+      try {
+        await FileService.cleanOldReadings();
+      } catch (error) {
+        console.error('Erro ao limpar leituras antigas:', error);
+      }
+    }, 24 * 60 * 60 * 1000); // 24 horas
+
     const syncCheckInterval = setInterval(() => {
-      if (syncServiceRef.current) {
-        const syncStatus = syncServiceRef.current.getSyncStatus();
+      if (networkSyncServiceRef.current) {
+        const syncStatus = networkSyncServiceRef.current.getSyncStatus();
         setIsSynchronized(syncStatus.pendingCycles === 0);
         setPendingCycles(syncStatus.pendingCycles);
       }
@@ -81,11 +95,22 @@ export const useHomeScreen = () => {
 
     return () => {
       clearInterval(syncCheckInterval);
-      if (syncServiceRef.current) {
-        syncServiceRef.current.destroy();
+      clearInterval(cleanupInterval);
+      if (networkSyncServiceRef.current) {
+        networkSyncServiceRef.current.destroy();
       }
     };
   }, [loadLastStatus, loadSimulationProgress]);
+
+  // Monitorar mudanças de conectividade
+  useEffect(() => {
+    if (networkSyncServiceRef.current) {
+      const isOnline =
+        networkStatus.isConnected &&
+        (networkStatus.isInternetReachable ?? false);
+      networkSyncServiceRef.current.setOnlineStatus(isOnline);
+    }
+  }, [networkStatus.isConnected, networkStatus.isInternetReachable]);
 
   const saveCurrentStatus = async (sensorData: any) => {
     try {
@@ -104,26 +129,6 @@ export const useHomeScreen = () => {
       saveCycleStatus(status);
     } catch (error) {
       console.error('Erro ao salvar status:', error);
-    }
-  };
-
-  const exportAfterRead = async () => {
-    if (!cycleServiceRef.current) return;
-    // Exportar todos os ciclos completos não sincronizados
-    const unsynced = cycleServiceRef.current.getUnsynchronizedCycles();
-    if (unsynced.length > 0) {
-      const syncData = unsynced.map(cycle => ({
-        cycleId: cycle.id,
-        startTime: cycle.startTime,
-        endTime: cycle.endTime!,
-        loadingEquipment: cycle.loadingEquipment || 'N/A',
-        dumpPoint: cycle.dumpPoint || 'N/A',
-        totalDuration: cycle.endTime! - cycle.startTime,
-        stages: cycle.stages,
-      }));
-      await FileService.saveSyncData(syncData);
-      // Notificar atualização para a tela de histórico
-      notifyExportUpdate();
     }
   };
 
@@ -154,9 +159,6 @@ export const useHomeScreen = () => {
       // Salvar status no AsyncStorage
       await saveCurrentStatus(sensorData);
 
-      // Exportar após cada leitura
-      await exportAfterRead();
-
       if (result.isNewCycle) {
         Alert.alert('Novo Ciclo', 'Iniciado novo ciclo de transporte');
       }
@@ -166,8 +168,8 @@ export const useHomeScreen = () => {
           'Ciclo de transporte finalizado com sucesso!',
         );
       }
-      if (syncServiceRef.current) {
-        const syncStatus = syncServiceRef.current.getSyncStatus();
+      if (networkSyncServiceRef.current) {
+        const syncStatus = networkSyncServiceRef.current.getSyncStatus();
         setIsSynchronized(syncStatus.pendingCycles === 0);
         setPendingCycles(syncStatus.pendingCycles);
       }

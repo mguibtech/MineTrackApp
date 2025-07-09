@@ -1,5 +1,6 @@
 import { SensorData, CycleStage, CycleData, SyncData } from '../types/cycle';
 import { useCycleStore } from '../store/useCycleStore';
+import { FileService } from './FileService';
 
 export class CycleService {
   private currentCycle: CycleData | null = null;
@@ -255,9 +256,9 @@ export class CycleService {
     isNewCycle: boolean;
     isCycleComplete: boolean;
   } {
-    const currentStage = this.determineStage(sensorData);
+    const stage = this.determineStage(sensorData);
     const nearestExcavator = this.findNearestExcavator(sensorData.beacons);
-    const velocityKmh = Math.round(sensorData.gps.velocity * 3.6); // Converter m/s para km/h
+    const velocityKmh = sensorData.gps.velocity * 3.6; // Converter m/s para km/h
     const dumpPoint = `GPS: ${this.DUMP_POINT.latitude}, ${this.DUMP_POINT.longitude}`;
 
     let isNewCycle = false;
@@ -278,9 +279,9 @@ export class CycleService {
     // Adicionar estágio se for diferente do anterior
     const lastStage =
       this.currentCycle.stages[this.currentCycle.stages.length - 1]?.stage;
-    if (currentStage !== lastStage) {
+    if (stage !== lastStage) {
       this.currentCycle.stages.push({
-        stage: currentStage,
+        stage: stage,
         timestamp: sensorData.timestamp,
         sensorData,
       });
@@ -291,7 +292,7 @@ export class CycleService {
       }
 
       // Verificar se o ciclo está completo
-      if (currentStage === 'TRÂNSITO VAZIO') {
+      if (stage === 'TRÂNSITO VAZIO') {
         this.currentCycle.endTime = sensorData.timestamp;
         this.currentCycle.isComplete = true;
         this.currentCycle.dumpPoint = dumpPoint;
@@ -306,8 +307,11 @@ export class CycleService {
       }
     }
 
+    // Marcar leitura como processada de forma assíncrona
+    this.markReadingAsProcessed(sensorData.timestamp);
+
     return {
-      currentStage,
+      currentStage: stage,
       loadingEquipment:
         this.currentCycle?.loadingEquipment || nearestExcavator?.id,
       dumpPoint,
@@ -315,6 +319,23 @@ export class CycleService {
       isNewCycle,
       isCycleComplete,
     };
+  }
+
+  private async markReadingAsProcessed(timestamp: number): Promise<void> {
+    try {
+      // Buscar leituras não processadas com timestamp próximo
+      const readings = await FileService.loadLineReadings();
+      const matchingReading = readings.find(
+        reading => Math.abs(reading.timestamp - timestamp) < 1000, // Dentro de 1 segundo
+      );
+
+      if (matchingReading && !matchingReading.processed) {
+        await FileService.markReadingAsProcessed(matchingReading.id);
+        console.log(`✅ Leitura ${matchingReading.id} marcada como processada`);
+      }
+    } catch (error) {
+      console.error('Erro ao marcar leitura como processada:', error);
+    }
   }
 
   public getUnsynchronizedCycles(): CycleData[] {

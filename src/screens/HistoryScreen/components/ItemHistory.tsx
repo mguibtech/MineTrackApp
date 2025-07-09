@@ -9,11 +9,21 @@ export interface ExportLogItem {
     ciclos: string[];
 }
 
-export function ItemHistory({ item }: { item: ExportLogItem }) {
+export interface LineReadingItem {
+    id: string;
+    data: string;
+    quantidade: number;
+    ciclos: string[];
+    lineNumber: number;
+    timestamp: number;
+    processed: boolean;
+}
+
+export function ItemHistory({ item }: { item: LineReadingItem }) {
     const navigation = useNavigation<StackNavigationProp<AppStackParamList>>();
 
     // Pegar o primeiro ciclo da lista para exibir como exemplo
-    const firstCycleId = item.ciclos[0] || 'CAM-001';
+    const firstCycleId = item.ciclos[0] || 'Linha 0';
 
     // Formatar a data
     const formatDate = (dateString: string) => {
@@ -55,27 +65,27 @@ export function ItemHistory({ item }: { item: ExportLogItem }) {
                     </Text>
                     <Box flexDirection="row" alignItems="center">
                         <Icon
-                            name="checkRound"
+                            name={item.processed ? "checkRound" : "warning"}
                             size={20}
-                            color="greenSuccess"
+                            color={item.processed ? "greenSuccess" : "error"}
                         />
                         <Text
                             ml="s4"
-                            color="greenSuccess"
+                            color={item.processed ? "greenSuccess" : "error"}
                             fontWeight="bold"
                             fontSize={18}
                         >
-                            Sincronizado
+                            {item.processed ? "Processado" : "Pendente"}
                         </Text>
                     </Box>
                 </Box>
-                {/* Linha: data de exportação */}
+                {/* Linha: data de leitura */}
                 <Text color="grayBlack" fontSize={18} mb="s4">
                     {formatDate(item.data)}
                 </Text>
-                {/* Linha: quantidade de ciclos */}
+                {/* Linha: quantidade de leituras */}
                 <Text color="grayBlack" fontSize={18} mb="s8">
-                    {item.quantidade} ciclo{item.quantidade > 1 ? 's' : ''} exportado{item.quantidade > 1 ? 's' : ''}
+                    {item.quantidade} leitura{item.quantidade > 1 ? 's' : ''} realizada{item.quantidade > 1 ? 's' : ''}
                 </Text>
             </Box>
             {/* Coluna direita: botão */}

@@ -1,4 +1,4 @@
-import { Box, Button, Icon, Screen, Text } from "@components";
+import { Box, Button, Icon, Screen, Text, SyncStatusIndicator } from "@components";
 import { useHomeScreen } from './useHomeScreen';
 
 export const HomeScreen = () => {
@@ -21,10 +21,16 @@ export const HomeScreen = () => {
     } = useHomeScreen();
 
     return (
-        <Screen>
+        <Screen scrollable>
             <Text color="grayWhite" fontSize={32} fontWeight="bold" mb="s32" textAlign="center">
                 Simulador de Ciclo
             </Text>
+
+            {/* Status de Sincronização */}
+            <SyncStatusIndicator
+                pendingCycles={pendingCycles}
+                lastSyncTime={new Date()}
+            />
 
             {/* Progresso da Simulação */}
             {totalLines > 0 && (

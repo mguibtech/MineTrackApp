@@ -2144,6 +2144,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@react-native-community/netinfo@npm:^11.4.1":
+  version: 11.4.1
+  resolution: "@react-native-community/netinfo@npm:11.4.1"
+  peerDependencies:
+    react-native: ">=0.59"
+  checksum: 10c0/118ba6d495bd14c2dab3d228a0c1857620a293ae8592d170d70eaf88a6ac6a4e35c7f84527975a9054e36891a9694aacc8ec053326b5f05961459ed08a70dd35
+  languageName: node
+  linkType: hard
+
 "@react-native-masked-view/masked-view@npm:^0.3.2":
   version: 0.3.2
   resolution: "@react-native-masked-view/masked-view@npm:0.3.2"
@@ -3040,6 +3049,7 @@ __metadata:
     "@react-native-community/cli": "npm:19.0.0"
     "@react-native-community/cli-platform-android": "npm:19.0.0"
     "@react-native-community/cli-platform-ios": "npm:19.0.0"
+    "@react-native-community/netinfo": "npm:^11.4.1"
     "@react-native-masked-view/masked-view": "npm:^0.3.2"
     "@react-native/babel-preset": "npm:0.80.1"
     "@react-native/eslint-config": "npm:0.80.1"
@@ -3066,6 +3076,7 @@ __metadata:
     react-native-gesture-handler: "npm:^2.27.1"
     react-native-safe-area-context: "npm:^5.5.1"
     react-native-screens: "npm:^4.11.1"
+    react-native-splash-screen: "npm:^3.3.0"
     react-native-svg: "npm:^15.12.0"
     react-test-renderer: "npm:19.1.0"
     typescript: "npm:5.0.4"
@@ -8241,6 +8252,15 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/88a33ba419bd571cc318e80d25eb172f5829677f2dd80dcb69cbeaa6a35ba26214e0e82af87baa375182afe41a276e8ef1a9d13b826f662f3a389982492c2879
+  languageName: node
+  linkType: hard
+
+"react-native-splash-screen@npm:^3.3.0":
+  version: 3.3.0
+  resolution: "react-native-splash-screen@npm:3.3.0"
+  peerDependencies:
+    react-native: ">=0.57.0"
+  checksum: 10c0/0979585b4087dba0825c94393477fc0301210cfa09eae4a98336e91865765f3c774cf8b20c525b3cea74c588e1e4ff0aa9d7500292ad52979670aa59ab83f0a4
   languageName: node
   linkType: hard
 

@@ -1,46 +1,95 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { ScrollView } from 'react-native';
 import { Box, Text, ActivityIndicator } from '@components';
 import { useNavigation } from '@react-navigation/native';
-import { ItemHistory, ExportLogItem } from './components/ItemHistory';
-import { FileService } from '@services';
+import { ItemHistory } from './components/ItemHistory';
+import { FileService, LineReading } from '@services';
+
+export interface LineReadingItem {
+    id: string;
+    data: string;
+    quantidade: number;
+    ciclos: string[];
+    lineNumber: number;
+    timestamp: number;
+    processed: boolean;
+}
 
 export const HistoryScreen = () => {
     const navigation = useNavigation();
-    const [exportLogs, setExportLogs] = useState<ExportLogItem[]>([]);
+    const [lineReadings, setLineReadings] = useState<LineReadingItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        total: 0,
+        processed: 0,
+        unprocessed: 0,
+    });
 
-    const loadExportLogs = async () => {
+    const loadLineReadings = useCallback(async () => {
         try {
             setLoading(true);
-            const logs = await FileService.readExportLog();
-            setExportLogs(logs);
+            const readings = await FileService.loadLineReadings();
+            const stats = await FileService.getReadingsStats();
+
+            // Agrupar leituras por dia para exibição
+            const groupedReadings = groupReadingsByDay(readings);
+            setLineReadings(groupedReadings);
+            setStats(stats);
         } catch (error) {
-            console.error('Erro ao carregar logs de exportação:', error);
+            console.error('Erro ao carregar leituras de linha:', error);
         } finally {
             setLoading(false);
         }
+    }, []);
+
+    const groupReadingsByDay = (readings: LineReading[]): LineReadingItem[] => {
+        const grouped: { [key: string]: LineReading[] } = {};
+
+        readings.forEach(reading => {
+            const date = new Date(reading.timestamp);
+            const dayKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            if (!grouped[dayKey]) {
+                grouped[dayKey] = [];
+            }
+            grouped[dayKey].push(reading);
+        });
+
+        return Object.entries(grouped).map(([dayKey, dayReadings]) => {
+            const sortedReadings = dayReadings.sort((a, b) => a.timestamp - b.timestamp);
+            const firstReading = sortedReadings[0];
+
+            return {
+                id: `day_${dayKey}`,
+                data: new Date(firstReading.timestamp).toISOString(),
+                quantidade: dayReadings.length,
+                ciclos: dayReadings.map(r => `Linha ${r.lineNumber}`),
+                lineNumber: firstReading.lineNumber,
+                timestamp: firstReading.timestamp,
+                processed: dayReadings.every(r => r.processed),
+            };
+        }).sort((a, b) => b.timestamp - a.timestamp); // Mais recente primeiro
     };
 
     useEffect(() => {
-        loadExportLogs();
-    }, []);
+        loadLineReadings();
+    }, [loadLineReadings]);
 
-    // Recarregar logs quando a tela receber foco
+    // Recarregar leituras quando a tela receber foco
     useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
-            loadExportLogs();
+            loadLineReadings();
         });
 
         return unsubscribe;
-    }, [navigation]);
+    }, [navigation, loadLineReadings]);
 
     if (loading) {
         return (
             <Box flex={1} bg="gray5" justifyContent="center" alignItems="center">
                 <ActivityIndicator size="large" color="grayBlack" />
                 <Text mt="s16" color="grayBlack" fontSize={16}>
-                    Carregando histórico...
+                    Carregando histórico de leituras...
                 </Text>
             </Box>
         );
@@ -51,27 +100,55 @@ export const HistoryScreen = () => {
             {/* Header */}
             <Box bg="grayWhite" p="s20" borderBottomWidth={1} borderBottomColor="gray4">
                 <Text color="grayBlack" fontSize={24} fontWeight="bold">
-                    Histórico de Exportações
+                    Histórico de Leituras
                 </Text>
                 <Text color="gray1" fontSize={16} mt="s4">
-                    {exportLogs.length} exportação{exportLogs.length !== 1 ? 'ões' : ''} realizada{exportLogs.length !== 1 ? 's' : ''}
+                    {lineReadings.length} dia{lineReadings.length !== 1 ? 's' : ''} de leituras
                 </Text>
+
+                {/* Estatísticas */}
+                <Box flexDirection="row" justifyContent="space-between" mt="s16">
+                    <Box alignItems="center">
+                        <Text color="grayBlack" fontSize={20} fontWeight="bold">
+                            {stats.total}
+                        </Text>
+                        <Text color="gray1" fontSize={12}>
+                            Total
+                        </Text>
+                    </Box>
+                    <Box alignItems="center">
+                        <Text color="greenSuccess" fontSize={20} fontWeight="bold">
+                            {stats.processed}
+                        </Text>
+                        <Text color="gray1" fontSize={12}>
+                            Processadas
+                        </Text>
+                    </Box>
+                    <Box alignItems="center">
+                        <Text color="error" fontSize={20} fontWeight="bold">
+                            {stats.unprocessed}
+                        </Text>
+                        <Text color="gray1" fontSize={12}>
+                            Pendentes
+                        </Text>
+                    </Box>
+                </Box>
             </Box>
 
-            {/* Lista de logs */}
+            {/* Lista de leituras */}
             <ScrollView style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-                {exportLogs.length === 0 ? (
+                {lineReadings.length === 0 ? (
                     <Box flex={1} justifyContent="center" alignItems="center" py="s40">
                         <Text color="gray1" fontSize={18} textAlign="center">
-                            Nenhuma exportação encontrada
+                            Nenhuma leitura encontrada
                         </Text>
                         <Text color="gray1" fontSize={14} textAlign="center" mt="s8">
-                            Execute simulações para gerar dados de exportação
+                            Execute simulações para gerar dados de leitura
                         </Text>
                     </Box>
                 ) : (
-                    exportLogs.map((log, index) => (
-                        <ItemHistory key={index} item={log} />
+                    lineReadings.map((reading) => (
+                        <ItemHistory key={reading.id} item={reading} />
                     ))
                 )}
             </ScrollView>

@@ -1,10 +1,19 @@
 import { SensorData, SyncData } from '../types/cycle';
 import RNFS from 'react-native-fs';
 
+export interface LineReading {
+  id: string;
+  timestamp: number;
+  lineNumber: number;
+  data: SensorData;
+  processed: boolean;
+}
+
 export class FileService {
   private static readonly SIMULATION_FILE = 'simulacao.jsonl';
   private static readonly SYNC_FILE = 'sync_servidor.jsonl';
   private static readonly OUTPUT_FILE = 'dados_sincronizados.jsonl';
+  private static readonly LINE_READINGS_FILE = 'line_readings.jsonl';
 
   public static async loadSimulationData(): Promise<SensorData[]> {
     try {
@@ -319,6 +328,170 @@ export class FileService {
     } catch (error) {
       console.error('Erro ao ler log de exportação:', error);
       return [];
+    }
+  }
+
+  // Salva uma leitura de linha de forma assíncrona
+  public static async saveLineReading(
+    lineNumber: number,
+    data: SensorData,
+  ): Promise<void> {
+    try {
+      const reading: LineReading = {
+        id: `reading_${Date.now()}_${lineNumber}`,
+        timestamp: Date.now(),
+        lineNumber,
+        data,
+        processed: false,
+      };
+
+      const readingLine = JSON.stringify(reading);
+      const readingsPath = `${RNFS.DocumentDirectoryPath}/${this.LINE_READINGS_FILE}`;
+
+      // Verificar se o arquivo já existe
+      let existingContent = '';
+      try {
+        existingContent = await RNFS.readFile(readingsPath, 'utf8');
+      } catch (error) {
+        // Arquivo não existe, criar novo
+      }
+
+      // Adicionar nova leitura ao final do arquivo
+      const newContent = existingContent
+        ? existingContent + '\n' + readingLine
+        : readingLine;
+
+      await RNFS.writeFile(readingsPath, newContent, 'utf8');
+
+      console.log(`✅ Leitura da linha ${lineNumber} salva assincronamente`);
+    } catch (error) {
+      console.error('Erro ao salvar leitura de linha:', error);
+    }
+  }
+
+  // Carrega todas as leituras de linha salvas
+  public static async loadLineReadings(): Promise<LineReading[]> {
+    try {
+      const readingsPath = `${RNFS.DocumentDirectoryPath}/${this.LINE_READINGS_FILE}`;
+
+      // Verificar se o arquivo existe
+      const exists = await RNFS.exists(readingsPath);
+      if (!exists) {
+        console.log('Arquivo de leituras não encontrado');
+        return [];
+      }
+
+      const fileContent = await RNFS.readFile(readingsPath, 'utf8');
+      const lines = fileContent.split('\n').filter(line => line.trim() !== '');
+
+      const readings: LineReading[] = lines
+        .map(line => {
+          try {
+            return JSON.parse(line);
+          } catch (error) {
+            console.error('Erro ao parsear linha de leitura:', line, error);
+            return null;
+          }
+        })
+        .filter(Boolean) as LineReading[];
+
+      console.log(`Lidas ${readings.length} leituras de linha`);
+      return readings;
+    } catch (error) {
+      console.error('Erro ao carregar leituras de linha:', error);
+      return [];
+    }
+  }
+
+  // Marca uma leitura como processada
+  public static async markReadingAsProcessed(readingId: string): Promise<void> {
+    try {
+      const readingsPath = `${RNFS.DocumentDirectoryPath}/${this.LINE_READINGS_FILE}`;
+
+      // Verificar se o arquivo existe
+      const exists = await RNFS.exists(readingsPath);
+      if (!exists) {
+        return;
+      }
+
+      const fileContent = await RNFS.readFile(readingsPath, 'utf8');
+      const lines = fileContent.split('\n').filter(line => line.trim() !== '');
+
+      const updatedLines = lines.map(line => {
+        try {
+          const reading: LineReading = JSON.parse(line);
+          if (reading.id === readingId) {
+            reading.processed = true;
+          }
+          return JSON.stringify(reading);
+        } catch (error) {
+          return line;
+        }
+      });
+
+      const newContent = updatedLines.join('\n');
+      await RNFS.writeFile(readingsPath, newContent, 'utf8');
+
+      console.log(`✅ Leitura ${readingId} marcada como processada`);
+    } catch (error) {
+      console.error('Erro ao marcar leitura como processada:', error);
+    }
+  }
+
+  // Limpa leituras antigas (mais de 30 dias)
+  public static async cleanOldReadings(): Promise<void> {
+    try {
+      const readings = await this.loadLineReadings();
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+      const recentReadings = readings.filter(
+        reading => reading.timestamp > thirtyDaysAgo,
+      );
+
+      const readingsPath = `${RNFS.DocumentDirectoryPath}/${this.LINE_READINGS_FILE}`;
+      const newContent = recentReadings
+        .map(reading => JSON.stringify(reading))
+        .join('\n');
+
+      await RNFS.writeFile(readingsPath, newContent, 'utf8');
+
+      console.log(
+        `🧹 Limpeza: ${
+          readings.length - recentReadings.length
+        } leituras antigas removidas`,
+      );
+    } catch (error) {
+      console.error('Erro ao limpar leituras antigas:', error);
+    }
+  }
+
+  // Obtém estatísticas das leituras
+  public static async getReadingsStats(): Promise<{
+    total: number;
+    processed: number;
+    unprocessed: number;
+    lastReading?: LineReading;
+  }> {
+    try {
+      const readings = await this.loadLineReadings();
+      const processed = readings.filter(r => r.processed).length;
+      const unprocessed = readings.length - processed;
+      const lastReading =
+        readings.length > 0 ? readings[readings.length - 1] : undefined;
+
+      return {
+        total: readings.length,
+        processed,
+        unprocessed,
+        lastReading,
+      };
+    } catch (error) {
+      console.error('Erro ao obter estatísticas das leituras:', error);
+      return {
+        total: 0,
+        processed: 0,
+        unprocessed: 0,
+      };
     }
   }
 }

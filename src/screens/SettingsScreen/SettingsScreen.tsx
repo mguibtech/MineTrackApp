@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { Switch, Alert } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { Alert } from "react-native";
 import { Screen, Box, Text, TouchableOpacityBox, Button } from "@components";
-import { FileService } from "@services";
+import { FileService, NetworkSyncService } from "@services";
 import { useCycleStore } from "../../store/useCycleStore";
+import { useNetworkStatus } from "@hooks";
+import { CycleService } from "@services";
 
 export const SettingsScreen = () => {
-    const [networkAvailable, setNetworkAvailable] = useState(false);
     const [isClearing, setIsClearing] = useState(false);
     const [syncFileInfo, setSyncFileInfo] = useState<{
         exists: boolean;
@@ -13,7 +14,7 @@ export const SettingsScreen = () => {
         size?: number;
         lineCount?: number;
     } | null>(null);
-    const [syncStatus, _setSyncStatus] = useState<{
+    const [syncStatus, setSyncStatus] = useState<{
         isOnline: boolean;
         pendingCycles: number;
         lastSyncTime?: Date;
@@ -21,18 +22,44 @@ export const SettingsScreen = () => {
     } | null>(null);
 
     const { clearAllData } = useCycleStore();
+    const networkStatus = useNetworkStatus();
     const simulationFile = "simulacao.jsonl";
 
+    // Referências para serviços
+    const cycleServiceRef = useRef<CycleService | null>(null);
+    const networkSyncServiceRef = useRef<NetworkSyncService | null>(null);
+
     useEffect(() => {
+        // Inicializar serviços
+        cycleServiceRef.current = new CycleService();
+        networkSyncServiceRef.current = new NetworkSyncService(cycleServiceRef.current);
+
         loadSyncInfo();
         const interval = setInterval(loadSyncInfo, 5000);
         return () => clearInterval(interval);
     }, []);
 
+    // Monitorar mudanças de conectividade
+    useEffect(() => {
+        if (networkSyncServiceRef.current) {
+            const isOnline = networkStatus.isConnected && (networkStatus.isInternetReachable ?? false);
+            networkSyncServiceRef.current.setOnlineStatus(isOnline);
+
+            // Atualizar status de sincronização
+            const status = networkSyncServiceRef.current.getSyncStatus();
+            setSyncStatus(status);
+        }
+    }, [networkStatus.isConnected, networkStatus.isInternetReachable]);
+
     const loadSyncInfo = async () => {
         try {
             const fileInfo = await FileService.getSyncFileInfo();
             setSyncFileInfo(fileInfo);
+
+            if (networkSyncServiceRef.current) {
+                const status = networkSyncServiceRef.current.getSyncStatus();
+                setSyncStatus(status);
+            }
         } catch (error) {
             console.error('Erro ao carregar informações do arquivo:', error);
         }
@@ -70,40 +97,69 @@ export const SettingsScreen = () => {
 
     const handleForceSync = async () => {
         try {
-            // Aqui você poderia chamar o SyncService para forçar sincronização
-            Alert.alert("Sincronização", "Sincronização forçada iniciada");
+            if (networkSyncServiceRef.current) {
+                const result = await networkSyncServiceRef.current.forceSync();
+                if (result.success) {
+                    Alert.alert("Sincronização", `${result.syncedCount} ciclos sincronizados com sucesso!`);
+                } else {
+                    Alert.alert("Erro", `Erro na sincronização: ${result.error}`);
+                }
+                await loadSyncInfo();
+            }
         } catch (error) {
             Alert.alert("Erro", "Erro ao forçar sincronização: " + (error as Error).message);
         }
     };
 
+    const getNetworkStatusText = () => {
+        if (!networkStatus.isConnected) return "Offline";
+        if (!networkStatus.isInternetReachable) return "Sem Internet";
+        if (networkStatus.isWifi) return "WiFi";
+        if (networkStatus.isCellular) return "Dados Móveis";
+        if (networkStatus.isEthernet) return "Ethernet";
+        return "Online";
+    };
+
+    const getNetworkStatusColor = () => {
+        if (!networkStatus.isConnected || !networkStatus.isInternetReachable) return "redError";
+        return "greenSuccess";
+    };
+
     return (
-        <Screen>
+        <Screen scrollable>
             <Text preset="headingLarge" color="grayBlack" mb="s32">
                 Configurações
             </Text>
 
-            {/* Arquivo de Simulação */}
+            {/* Status de Rede */}
             <Text preset="paragraphLarge" color="grayBlack" mb="s8" semibold>
-                Arquivo de Simulação
+                Status de Rede
             </Text>
-            <Box flexDirection="row" alignItems="center" mb="s32">
-                <Box
-                    flex={1}
-                    borderWidth={1}
-                    borderColor="gray3"
-                    borderRadius="s12"
-                    p="s14"
-                    bg="grayWhite"
-                    mr="s8"
-                >
+            <Box bg="gray5" borderRadius="s12" p="s16" mb="s24">
+                <Box flexDirection="row" justifyContent="space-between" mb="s8">
                     <Text preset="paragraphMedium" color="grayBlack">
-                        {simulationFile}
+                        Conectividade:
+                    </Text>
+                    <Text preset="paragraphMedium" color={getNetworkStatusColor()}>
+                        {getNetworkStatusText()}
                     </Text>
                 </Box>
-                <TouchableOpacityBox p="s8">
-                    <Text fontSize={20}>✏️</Text>
-                </TouchableOpacityBox>
+                <Box flexDirection="row" justifyContent="space-between" mb="s8">
+                    <Text preset="paragraphMedium" color="grayBlack">
+                        Tipo de Rede:
+                    </Text>
+                    <Text preset="paragraphMedium" color="grayBlack">
+                        {networkStatus.type || "Desconhecido"}
+                    </Text>
+                </Box>
+                <Box flexDirection="row" justifyContent="space-between">
+                    <Text preset="paragraphMedium" color="grayBlack">
+                        Internet Acessível:
+                    </Text>
+                    <Text preset="paragraphMedium" color={networkStatus.isInternetReachable ? "greenSuccess" : "redError"}>
+                        {networkStatus.isInternetReachable ? "Sim" : "Não"}
+                    </Text>
+                </Box>
             </Box>
 
             {/* Status de Sincronização */}
@@ -115,8 +171,8 @@ export const SettingsScreen = () => {
                     <Text preset="paragraphMedium" color="grayBlack">
                         Status da Rede:
                     </Text>
-                    <Text preset="paragraphMedium" color={networkAvailable ? "greenSuccess" : "redError"}>
-                        {networkAvailable ? "Online" : "Offline"}
+                    <Text preset="paragraphMedium" color={syncStatus?.isOnline ? "greenSuccess" : "redError"}>
+                        {syncStatus?.isOnline ? "Online" : "Offline"}
                     </Text>
                 </Box>
                 <Box flexDirection="row" justifyContent="space-between" mb="s8">
@@ -145,6 +201,29 @@ export const SettingsScreen = () => {
                         </Text>
                     </Box>
                 )}
+            </Box>
+
+            {/* Arquivo de Simulação */}
+            <Text preset="paragraphLarge" color="grayBlack" mb="s8" semibold>
+                Arquivo de Simulação
+            </Text>
+            <Box flexDirection="row" alignItems="center" mb="s32">
+                <Box
+                    flex={1}
+                    borderWidth={1}
+                    borderColor="gray3"
+                    borderRadius="s12"
+                    p="s14"
+                    bg="grayWhite"
+                    mr="s8"
+                >
+                    <Text preset="paragraphMedium" color="grayBlack">
+                        {simulationFile}
+                    </Text>
+                </Box>
+                <TouchableOpacityBox p="s8">
+                    <Text fontSize={20}>✏️</Text>
+                </TouchableOpacityBox>
             </Box>
 
             {/* Arquivo de Sincronização */}
@@ -190,19 +269,6 @@ export const SettingsScreen = () => {
                 )}
             </Box>
 
-            {/* Rede Disponível */}
-            <Box flexDirection="row" alignItems="center" justifyContent="space-between" mb="s24">
-                <Text preset="paragraphLarge" color="grayBlack" semibold>
-                    Rede Disponível
-                </Text>
-                <Switch
-                    value={networkAvailable}
-                    onValueChange={setNetworkAvailable}
-                    trackColor={{ false: "#E1E1E1", true: "#636363" }}
-                    thumbColor={networkAvailable ? "#fff" : "#fff"}
-                />
-            </Box>
-
             {/* Botões de ação */}
             <Box mb="s16">
                 <Button
@@ -214,6 +280,7 @@ export const SettingsScreen = () => {
                     alignItems="center"
                     justifyContent="center"
                     onPress={handleForceSync}
+                    disabled={!networkStatus.isConnected || !networkStatus.isInternetReachable}
                 />
             </Box>
 
