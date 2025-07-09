@@ -134,56 +134,8 @@ export const DetailScreen = () => {
 
                 setCycleDetail(detail);
             } else {
-                // Se não encontrar, criar dados mock
-                setCycleDetail({
-                    id: cycleId,
-                    start: '08:00',
-                    end: '08:25',
-                    steps: 6,
-                    synced: true,
-                    stages: [
-                        {
-                            name: 'EM CARREGAMENTO',
-                            icon: 'home',
-                            speed: 0,
-                            gps: { lat: -23.55, lon: -46.63 },
-                            equipments: 'ESC-002 (Escavadeira)',
-                            timestamp: '08:02',
-                        },
-                        {
-                            name: 'TRANSITO CHEIO',
-                            icon: 'arrowUp',
-                            speed: 32,
-                            gps: { lat: -23.5502, lon: -46.631 },
-                            equipments: 'Em trânsito',
-                            timestamp: '08:10',
-                        },
-                        {
-                            name: 'EM FILA BASCULAMENTO',
-                            icon: 'arrowRight',
-                            speed: 2,
-                            gps: null,
-                            equipments: 'Aguardando basculamento',
-                            timestamp: '08:15',
-                        },
-                        {
-                            name: 'EM BASCULAMENTO',
-                            icon: 'violation',
-                            speed: 0,
-                            gps: null,
-                            equipments: 'BAS-001 (Basculante)',
-                            timestamp: '08:18',
-                        },
-                        {
-                            name: 'TRANSITO VAZIO',
-                            icon: 'arrowDown',
-                            speed: 28,
-                            gps: { lat: -23.5508, lon: -46.634 },
-                            equipments: 'Retornando',
-                            timestamp: '08:23',
-                        },
-                    ],
-                });
+                // Se não encontrar, deixar cycleDetail como null
+                setCycleDetail(null);
             }
         } catch (error) {
             console.error('Erro ao carregar detalhes do ciclo:', error);

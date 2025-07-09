@@ -17,3 +17,23 @@ jest.mock('@react-native-community/netinfo', () => ({
     Promise.resolve({ isConnected: true, isInternetReachable: true }),
   ),
 }));
+
+// Mock para react-native-splash-screen
+jest.mock('react-native-splash-screen', () => ({
+  show: jest.fn(),
+  hide: jest.fn(),
+  preventAutoHide: jest.fn(),
+  hideAsync: jest.fn(),
+}));
+
+// Mock para console.error para evitar logs desnecessários nos testes
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  if (
+    typeof args[0] === 'string' &&
+    args[0].includes('Warning: ReactDOM.render is no longer supported')
+  ) {
+    return;
+  }
+  originalConsoleError.call(console, ...args);
+};
