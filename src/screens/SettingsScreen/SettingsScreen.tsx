@@ -10,6 +10,9 @@ export const SettingsScreen = () => {
         syncStatus,
         handleClearData,
         handleForceSync,
+        handleTestFileCreation,
+        handleValidateJsonlFile,
+        handleDebugFile,
         getNetworkStatusColor,
         getNetworkStatusText,
         networkStatus,
@@ -172,6 +175,45 @@ export const SettingsScreen = () => {
                     justifyContent="center"
                     onPress={handleForceSync}
                     disabled={!networkStatus.isConnected || !networkStatus.isInternetReachable}
+                />
+            </Box>
+
+            <Box mb="s16">
+                <Button
+                    title="🧪 TESTAR CRIAÇÃO DE ARQUIVO"
+                    preset="outline"
+                    borderColor="grayBlack"
+                    borderRadius="s12"
+                    height={48}
+                    alignItems="center"
+                    justifyContent="center"
+                    onPress={handleTestFileCreation}
+                />
+            </Box>
+
+            <Box mb="s16">
+                <Button
+                    title="🔍 VALIDAR ARQUIVO JSONL"
+                    preset="outline"
+                    borderColor="grayBlack"
+                    borderRadius="s12"
+                    height={48}
+                    alignItems="center"
+                    justifyContent="center"
+                    onPress={handleValidateJsonlFile}
+                />
+            </Box>
+
+            <Box mb="s16">
+                <Button
+                    title="🐛 DEBUG DO ARQUIVO"
+                    preset="outline"
+                    borderColor="grayBlack"
+                    borderRadius="s12"
+                    height={48}
+                    alignItems="center"
+                    justifyContent="center"
+                    onPress={handleDebugFile}
                 />
             </Box>
 

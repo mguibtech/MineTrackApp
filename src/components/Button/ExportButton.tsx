@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { Box, Button, Icon, Text } from '@components';
-import { useSyncCiclos } from '../hooks/useSyncCiclos';
+import { useSyncCiclos } from '../../hooks/useSyncCiclos';
 
 export const ExportButton = () => {
     const { mutateAsync } = useSyncCiclos();

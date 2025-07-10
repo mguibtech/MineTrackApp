@@ -1,7 +1,7 @@
 export * from './ActivityIndicator/ActivityIndicator';
 export * from './Box/Box';
 export * from './Button/Button';
-export * from './ExportButton';
+export * from './Button/ExportButton';
 export * from './Icons/Icon';
 export * from './Icons/types';
 export * from './PasswordInput/PasswordInput';
@@ -9,5 +9,5 @@ export * from './RadioGroup/RadioGroup';
 export * from './screen/Screen';
 export * from './Text/Text';
 export * from './TextInput/TextInput';
-export * from './SyncStatusIndicator';
-export * from './SplashScreen';
+export * from './SyncStatusIndicator/SyncStatusIndicator';
+export * from './SplashScreen/SplashScreen';

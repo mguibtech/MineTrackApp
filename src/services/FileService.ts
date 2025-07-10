@@ -144,6 +144,10 @@ export class FileService {
       };
 
       // Criar conteúdo do arquivo JSONL
+      // Formato JSONL: cada linha é um objeto JSON válido
+      // Exemplo:
+      // {"ciclo_id": "CYCLE_123", "data_inicio": "2024-01-15T10:30:00.000Z", ...}
+      // {"ciclo_id": "CYCLE_456", "data_inicio": "2024-01-15T11:00:00.000Z", ...}
       const syncFileContent = syncData
         .map(formatCycle)
         .map(data => JSON.stringify(data))
@@ -173,6 +177,14 @@ export class FileService {
       );
       console.log(`📋 Formato: 1 linha JSON por ciclo completo`);
 
+      // Log do conteúdo do arquivo para verificar formato JSONL
+      console.log('📄 Conteúdo do arquivo JSONL:');
+      const lines = newContent.split('\n').filter(line => line.trim() !== '');
+      lines.forEach((line, index) => {
+        console.log(`Linha ${index + 1}: ${line.substring(0, 100)}...`);
+      });
+      console.log(`📊 Total de linhas JSON: ${lines.length}`);
+
       return true;
     } catch (error) {
       console.error('Erro ao salvar dados de sincronização:', error);
@@ -192,23 +204,37 @@ export class FileService {
       }
 
       const fileContent = await RNFS.readFile(outputPath, 'utf8');
+      console.log(
+        '📄 Conteúdo do arquivo lido:',
+        fileContent.substring(0, 200) + '...',
+      );
+
       const lines = fileContent.split('\n').filter(line => line.trim() !== '');
+      console.log('📊 Total de linhas encontradas:', lines.length);
 
       const syncData: SyncData[] = lines
-        .map(line => {
+        .map((line, index) => {
           try {
-            return JSON.parse(line);
+            const parsed = JSON.parse(line);
+            console.log(`✅ Linha ${index + 1} parseada com sucesso`);
+            return parsed;
           } catch (error) {
-            console.error('Erro ao parsear linha:', line, error);
+            console.error(
+              `❌ Erro ao parsear linha ${index + 1}:`,
+              line.substring(0, 100),
+              error,
+            );
             return null;
           }
         })
         .filter(Boolean) as SyncData[];
 
       console.log(
-        `Lidos ${syncData.length} registros do arquivo sync_servidor.jsonl`,
+        `Lidos ${syncData.length} registros válidos do arquivo sync_servidor.jsonl`,
       );
-      return syncData;
+
+      // Garantir que sempre retorne um array
+      return Array.isArray(syncData) ? syncData : [];
     } catch (error) {
       console.error('Erro ao ler arquivo de sincronização:', error);
       return [];

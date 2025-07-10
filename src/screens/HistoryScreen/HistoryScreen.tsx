@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, RefreshControl } from 'react-native';
 import { Box, Text, ActivityIndicator } from '@components';
 import { useNavigation } from '@react-navigation/native';
 import { ItemHistory } from './components/ItemHistory';
@@ -19,10 +19,12 @@ export const HistoryScreen = () => {
     const navigation = useNavigation();
     const [lineReadings, setLineReadings] = useState<LineReadingItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [stats, setStats] = useState({
         total: 0,
         processed: 0,
         unprocessed: 0,
+        syncedCycles: 0,
     });
 
     const loadLineReadings = useCallback(async () => {
@@ -30,15 +32,40 @@ export const HistoryScreen = () => {
             setLoading(true);
             const readings = await FileService.loadLineReadings();
             const stats = await FileService.getReadingsStats();
+            const syncFileInfo = await FileService.getSyncFileInfo();
 
             // Agrupar leituras por dia para exibição
             const groupedReadings = groupReadingsByDay(readings);
             setLineReadings(groupedReadings);
-            setStats(stats);
+            setStats({
+                ...stats,
+                syncedCycles: syncFileInfo.exists ? (syncFileInfo.lineCount || 0) : 0
+            });
         } catch (error) {
             console.error('Erro ao carregar leituras de linha:', error);
         } finally {
             setLoading(false);
+        }
+    }, []);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            const readings = await FileService.loadLineReadings();
+            const stats = await FileService.getReadingsStats();
+            const syncFileInfo = await FileService.getSyncFileInfo();
+
+            // Agrupar leituras por dia para exibição
+            const groupedReadings = groupReadingsByDay(readings);
+            setLineReadings(groupedReadings);
+            setStats({
+                ...stats,
+                syncedCycles: syncFileInfo.exists ? (syncFileInfo.lineCount || 0) : 0
+            });
+        } catch (error) {
+            console.error('Erro ao atualizar leituras de linha:', error);
+        } finally {
+            setRefreshing(false);
         }
     }, []);
 
@@ -132,11 +159,38 @@ export const HistoryScreen = () => {
                             Pendentes
                         </Text>
                     </Box>
+                    <Box alignItems="center">
+                        <Text color="primary" fontSize={20} fontWeight="bold">
+                            {stats.syncedCycles}
+                        </Text>
+                        <Text color="gray1" fontSize={12}>
+                            Ciclos Sinc.
+                        </Text>
+                    </Box>
+                </Box>
+
+                {/* Explicação sobre leituras vs ciclos */}
+                <Box mt="s12" p="s12" bg="gray4" borderRadius="s8">
+                    <Text color="gray1" fontSize={12} textAlign="center">
+                        💡 <Text fontWeight="bold">Leituras</Text> são simulações executadas. <Text fontWeight="bold">Ciclos</Text> são operações completas sincronizadas com o servidor.
+                    </Text>
                 </Box>
             </Box>
 
             {/* Lista de leituras */}
-            <ScrollView style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+            <ScrollView
+                style={{ paddingHorizontal: 16, paddingTop: 16 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={['#007AFF']}
+                        tintColor="#007AFF"
+                        title="Atualizando..."
+                        titleColor="#007AFF"
+                    />
+                }
+            >
                 {lineReadings.length === 0 ? (
                     <Box flex={1} justifyContent="center" alignItems="center" py="s40">
                         <Text color="gray1" fontSize={18} textAlign="center">
