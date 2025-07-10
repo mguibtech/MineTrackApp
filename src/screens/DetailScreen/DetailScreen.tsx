@@ -36,25 +36,64 @@ export const DetailScreen = () => {
         try {
             setLoading(true);
 
+            console.log('🔍 Buscando ciclo:', cycleId);
+
             // Buscar dados do arquivo de sincronização
             const syncData = await FileService.readSyncFile();
-            const cycleData = syncData.find(cycle => cycle.cycleId === cycleId);
+            console.log('📄 Dados do arquivo de sincronização:', syncData);
+
+            // Se o cycleId começa com "Linha", é uma leitura de linha
+            // Precisamos buscar um ciclo sincronizado que corresponda
+            let cycleData: any = null;
+
+            if (cycleId.startsWith('Linha')) {
+                // Extrair número da linha
+                const lineNumber = parseInt(cycleId.replace('Linha ', ''));
+                console.log('📊 Buscando ciclo para linha:', lineNumber);
+
+                // Buscar um ciclo que tenha dados da linha correspondente
+                // Por enquanto, vamos pegar o primeiro ciclo disponível e simular dados baseados na linha
+                cycleData = syncData.find((cycle: any) => {
+                    // Verificar se o ciclo tem estágios que correspondem à linha
+                    const stages = cycle.etapas || cycle.stages || [];
+                    return stages.length > 0; // Por enquanto, pegar qualquer ciclo com estágios
+                });
+
+                if (cycleData) {
+                    console.log('✅ Ciclo encontrado para linha:', lineNumber);
+                    // Modificar o ID para refletir a linha
+                    cycleData = {
+                        ...cycleData,
+                        ciclo_id: `Linha_${lineNumber}_Ciclo`,
+                        lineNumber: lineNumber
+                    };
+                }
+            } else {
+                // Busca direta por ID do ciclo
+                cycleData = syncData.find((cycle: any) => {
+                    const cycleIdFromFile = cycle.ciclo_id || cycle.cycleId || cycle.id;
+                    console.log('🔍 Comparando:', cycleIdFromFile, 'com', cycleId);
+                    return cycleIdFromFile === cycleId;
+                });
+            }
+
+            console.log('✅ Ciclo encontrado:', cycleData);
 
             if (cycleData) {
-                // Converter dados do formato SyncData para CycleDetail
+                // Converter dados do formato do arquivo para CycleDetail
                 const detail: CycleDetail = {
-                    id: cycleData.cycleId,
-                    start: new Date(cycleData.startTime).toLocaleTimeString('pt-BR', {
+                    id: (cycleData as any).ciclo_id || (cycleData as any).cycleId || (cycleData as any).id,
+                    start: new Date((cycleData as any).data_inicio || (cycleData as any).startTime).toLocaleTimeString('pt-BR', {
                         hour: '2-digit',
                         minute: '2-digit'
                     }),
-                    end: new Date(cycleData.endTime).toLocaleTimeString('pt-BR', {
+                    end: new Date((cycleData as any).data_fim || (cycleData as any).endTime).toLocaleTimeString('pt-BR', {
                         hour: '2-digit',
                         minute: '2-digit'
                     }),
-                    steps: cycleData.stages.length,
+                    steps: ((cycleData as any).etapas || (cycleData as any).stages || []).length,
                     synced: true, // Se está no arquivo de sync, está sincronizado
-                    stages: cycleData.stages.map((stage, _index) => {
+                    stages: ((cycleData as any).etapas || (cycleData as any).stages || []).map((stage: any, _index: number) => {
                         // Mapear estágios para ícones
                         const getStageIcon = (stageName: string): IconProps['name'] => {
                             switch (stageName) {
@@ -62,12 +101,14 @@ export const DetailScreen = () => {
                                 case 'EM CARREGAMENTO':
                                     return 'home';
                                 case 'TRANSITO CHEIO':
+                                case 'TRÂNSITO CHEIO':
                                     return 'arrowUp';
                                 case 'EM FILA BASCULAMENTO':
                                     return 'arrowRight';
                                 case 'EM BASCULAMENTO':
                                     return 'violation';
                                 case 'TRANSITO VAZIO':
+                                case 'TRÂNSITO VAZIO':
                                     return 'arrowDown';
                                 default:
                                     return 'home';
@@ -84,6 +125,7 @@ export const DetailScreen = () => {
                                         equipments: 'ESC-002 (Escavadeira)'
                                     };
                                 case 'TRANSITO CHEIO':
+                                case 'TRÂNSITO CHEIO':
                                     return {
                                         speed: Math.floor(Math.random() * 30) + 15,
                                         gps: { lat: -23.5502, lon: -46.631 },
@@ -102,6 +144,7 @@ export const DetailScreen = () => {
                                         equipments: 'BAS-001 (Basculante)'
                                     };
                                 case 'TRANSITO VAZIO':
+                                case 'TRÂNSITO VAZIO':
                                     return {
                                         speed: Math.floor(Math.random() * 25) + 20,
                                         gps: { lat: -23.5508, lon: -46.634 },
@@ -116,11 +159,12 @@ export const DetailScreen = () => {
                             }
                         };
 
-                        const stageData = getStageData(stage.stage);
+                        const stageName = stage.etapa || stage.stage;
+                        const stageData = getStageData(stageName);
 
                         return {
-                            name: stage.stage,
-                            icon: getStageIcon(stage.stage),
+                            name: stageName,
+                            icon: getStageIcon(stageName),
                             speed: stageData.speed,
                             gps: stageData.gps,
                             equipments: stageData.equipments,
@@ -158,8 +202,19 @@ export const DetailScreen = () => {
 
     if (!cycleDetail) {
         return (
-            <Box flex={1} bg="gray5" justifyContent="center" alignItems="center">
-                <Text color="grayBlack" fontSize={18}>Ciclo não encontrado</Text>
+            <Box flex={1} bg="gray5" justifyContent="center" alignItems="center" p="s20">
+                <Box mb="s16">
+                    <Icon name="warning" size={64} color="error" />
+                </Box>
+                <Text color="grayBlack" fontSize={18} textAlign="center" mb="s8">
+                    Ciclo não encontrado
+                </Text>
+                <Text color="gray1" fontSize={14} textAlign="center" mb="s16">
+                    {cycleId.startsWith('Linha')
+                        ? 'Esta leitura ainda não foi processada em um ciclo completo. Execute simulações e force a sincronização para gerar ciclos.'
+                        : 'O ciclo especificado não foi encontrado no arquivo de sincronização.'
+                    }
+                </Text>
                 <Button
                     title="Voltar"
                     onPress={() => navigation.goBack()}
@@ -180,16 +235,8 @@ export const DetailScreen = () => {
                 borderBottomWidth={1}
                 borderBottomColor="gray4"
             >
-                <Button
-                    onPress={() => navigation.goBack()}
-                    title=""
-                    width={40}
-                    height={40}
-                    justifyContent="center"
-                    alignItems="center"
-                >
-                    <Icon name="arrowLeft" size={24} color="grayBlack" />
-                </Button>
+                <Icon name="arrowLeft" size={24} color="grayBlack" onPress={() => navigation.goBack()} />
+
                 <Text ml="s12" color="grayBlack" fontSize={20} fontWeight="bold">
                     Detalhes do Ciclo
                 </Text>

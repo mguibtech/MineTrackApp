@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ScrollView, RefreshControl } from 'react-native';
-import { Box, Text, ActivityIndicator } from '@components';
+import { Box, Text, ActivityIndicator, Button, Icon, TouchableOpacityBox } from '@components';
 import { useNavigation } from '@react-navigation/native';
 import { ItemHistory } from './components/ItemHistory';
 import { FileService, LineReading } from '@services';
@@ -15,11 +15,139 @@ export interface LineReadingItem {
     processed: boolean;
 }
 
+interface CollapsibleSectionProps {
+    title: string;
+    count: number;
+    isCollapsed: boolean;
+    onToggle: () => void;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
+    canMoveUp: boolean;
+    canMoveDown: boolean;
+    children: React.ReactNode;
+    color: string;
+    iconName: string;
+}
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+    title,
+    count,
+    isCollapsed,
+    onToggle,
+    onMoveUp,
+    onMoveDown,
+    canMoveUp,
+    canMoveDown,
+    children,
+    color,
+    iconName
+}) => {
+    return (
+        <Box mb="s16">
+            {/* Header do collapse */}
+            <Box
+                bg="grayWhite"
+                borderRadius="s12"
+                p="s16"
+                shadowColor="grayBlack"
+                shadowOffset={{ width: 0, height: 2 }}
+                shadowOpacity={0.06}
+                shadowRadius={4}
+                elevation={1}
+            >
+                {/* Linha superior: ícone, título e botões de reordenação */}
+                <Box flexDirection="row" alignItems="center" justifyContent="space-between" mb="s12">
+                    <Box flexDirection="row" alignItems="center" flex={1}>
+                        <Box mr="s12">
+                            <Icon
+                                name={iconName as any}
+                                size={24}
+                                color={color as any}
+                            />
+                        </Box>
+                        <Text color="grayBlack" fontSize={18} fontWeight="bold" flex={1}>
+                            {title}
+                        </Text>
+                    </Box>
+                    <Box flexDirection="row" alignItems="center">
+                        <Button
+                            onPress={onMoveUp}
+                            title=""
+                            width={32}
+                            height={32}
+                            borderRadius="s8"
+                            backgroundColor="carrotSecondary"
+                            disabled={!canMoveUp}
+                            mr="s8"
+                        >
+                            <Icon
+                                name="arrowUp"
+                                size={20}
+                                color={canMoveUp ? "primary" : "backgroundContrast"}
+                            />
+                        </Button>
+                        <Button
+                            onPress={onMoveDown}
+                            title=""
+                            width={32}
+                            height={32}
+                            borderRadius="s8"
+                            backgroundColor="buttonPrimary"
+                            disabled={!canMoveDown}
+                        >
+                            <Icon
+                                name="arrowDown"
+                                size={20}
+                                color={canMoveDown ? "primary" : "gray3"}
+                            />
+                        </Button>
+                    </Box>
+                </Box>
+
+
+                <TouchableOpacityBox onPress={onToggle} flexDirection="row" alignItems="center">
+                    <Icon
+                        name={isCollapsed ? "arrowDown" : "arrowUp"}
+                        size={20}
+
+                    />
+                    <Text ml="s12" color="gray1" fontSize={14}>
+                        {isCollapsed ? "Expandir" : "Colapsar"}
+                    </Text>
+                    <Box
+                        ml="s8"
+                        bg={color as any}
+                        borderRadius="s12"
+                        px="s8"
+                        py="s4"
+                    >
+                        <Text color="grayWhite" fontSize={12} fontWeight="bold">
+                            {count}
+                        </Text>
+                    </Box>
+                </TouchableOpacityBox>
+            </Box>
+
+            {/* Conteúdo do collapse */}
+            {!isCollapsed && (
+                <Box mt="s8">
+                    {children}
+                </Box>
+            )}
+        </Box>
+    );
+};
+
 export const HistoryScreen = () => {
     const navigation = useNavigation();
     const [lineReadings, setLineReadings] = useState<LineReadingItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [collapsedSections, setCollapsedSections] = useState<{ [key: string]: boolean }>({
+        processed: false,
+        pending: false,
+    });
+    const [sectionOrder, setSectionOrder] = useState<string[]>(['processed', 'pending']);
     const [stats, setStats] = useState({
         total: 0,
         processed: 0,
@@ -69,6 +197,37 @@ export const HistoryScreen = () => {
         }
     }, []);
 
+    const toggleCollapse = (section: string) => {
+        setCollapsedSections(prev => ({
+            ...prev,
+            [section]: !prev[section]
+        }));
+    };
+
+    const moveSectionUp = (section: string) => {
+        setSectionOrder(prev => {
+            const currentIndex = prev.indexOf(section);
+            if (currentIndex > 0) {
+                const newOrder = [...prev];
+                [newOrder[currentIndex], newOrder[currentIndex - 1]] = [newOrder[currentIndex - 1], newOrder[currentIndex]];
+                return newOrder;
+            }
+            return prev;
+        });
+    };
+
+    const moveSectionDown = (section: string) => {
+        setSectionOrder(prev => {
+            const currentIndex = prev.indexOf(section);
+            if (currentIndex < prev.length - 1) {
+                const newOrder = [...prev];
+                [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+                return newOrder;
+            }
+            return prev;
+        });
+    };
+
     const groupReadingsByDay = (readings: LineReading[]): LineReadingItem[] => {
         const grouped: { [key: string]: LineReading[] } = {};
 
@@ -97,6 +256,10 @@ export const HistoryScreen = () => {
             };
         }).sort((a, b) => b.timestamp - a.timestamp); // Mais recente primeiro
     };
+
+    // Separar leituras por tipo
+    const processedReadings = lineReadings.filter(reading => reading.processed);
+    const pendingReadings = lineReadings.filter(reading => !reading.processed);
 
     useEffect(() => {
         loadLineReadings();
@@ -201,9 +364,38 @@ export const HistoryScreen = () => {
                         </Text>
                     </Box>
                 ) : (
-                    lineReadings.map((reading) => (
-                        <ItemHistory key={reading.id} item={reading} />
-                    ))
+                    <>
+                        {/* Seções colapsáveis */}
+                        {sectionOrder.map((sectionType) => {
+                            const isProcessed = sectionType === 'processed';
+                            const readings = isProcessed ? processedReadings : pendingReadings;
+                            const title = isProcessed ? 'Processadas' : 'Pendentes';
+                            const color = isProcessed ? 'greenSuccess' : 'error';
+                            const iconName = isProcessed ? 'checkRound' : 'warning';
+
+                            if (readings.length === 0) return null;
+
+                            return (
+                                <CollapsibleSection
+                                    key={sectionType}
+                                    title={title}
+                                    count={readings.length}
+                                    isCollapsed={collapsedSections[sectionType]}
+                                    onToggle={() => toggleCollapse(sectionType)}
+                                    onMoveUp={() => moveSectionUp(sectionType)}
+                                    onMoveDown={() => moveSectionDown(sectionType)}
+                                    canMoveUp={sectionOrder.indexOf(sectionType) > 0}
+                                    canMoveDown={sectionOrder.indexOf(sectionType) < sectionOrder.length - 1}
+                                    color={color}
+                                    iconName={iconName}
+                                >
+                                    {readings.map((item, index) => (
+                                        <ItemHistory key={index} item={item} />
+                                    ))}
+                                </CollapsibleSection>
+                            );
+                        })}
+                    </>
                 )}
             </ScrollView>
         </Box>
